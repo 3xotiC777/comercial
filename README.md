@@ -1,18 +1,25 @@
 # Centro de Solicitudes D&N
 
-Aplicación estática lista para GitHub Pages. Sin configuración muestra una demostración; para producción usa el plan gratuito de Supabase para base de datos, archivos, acceso interno y correos.
+Ticketera web publicada en GitHub Pages y conectada a SharePoint Online.
 
-## Publicar
+## Recursos configurados
 
-1. Sube este proyecto a un repositorio GitHub.
-2. En **Settings → Pages**, selecciona **GitHub Actions**.
-3. Agrega los secretos `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_TEAM_EMAIL`.
+- Sitio: `https://dichterneiracorp.sharepoint.com/sites/reportingdn`
+- Lista: `Comercial planeacion`
+- Biblioteca de adjuntos: `Comercial planeacion proyecto`
+- Identidad: Microsoft Entra ID con inicio de sesión corporativo.
 
-## Activar producción
+No se requieren secretos ni claves privadas para la página. Cada persona inicia sesión con su cuenta corporativa y SharePoint aplica sus permisos.
 
-1. Crea un proyecto gratuito de Supabase y ejecuta `supabase/schema.sql` en SQL Editor.
-2. Crea los usuarios internos desde **Authentication → Users** y ajusta la lista de correos permitidos del SQL si es necesario.
-3. Despliega `supabase/functions/notify-ticket` y registra en Supabase los secretos `RESEND_API_KEY` y `TEAM_EMAIL`. La función envía al solicitante, al equipo y al analista asignado.
-4. Para las pruebas, Diego, Miguel y Rony reciben los avisos en `dmontoya@dichter-neira.com`; cambia `analystEmails` antes de producción.
+## Notificaciones por correo
 
-Nunca subas un archivo `.env` con claves reales.
+Configura dos flujos de Power Automate desde la lista **Comercial planeacion**:
+
+1. **Cuando se cree un elemento:** enviar un correo al solicitante y a `dmontoya@dichter-neira.com` con la información del ticket.
+2. **Cuando se modifique un elemento:** agregar una condición para comprobar cambios en `Estado` o `Responsable`; enviar el correo al solicitante y al responsable asignado.
+
+En pruebas, Diego, Miguel y Rony se asignan en la interfaz. Antes de producción, agrega sus correos al flujo de Power Automate y al arreglo `adminEmails` en `src/TicketApp.tsx`.
+
+## Permisos recomendados de SharePoint
+
+Para que el área comercial no vea solicitudes ajenas, en la configuración avanzada de la lista limita la lectura y edición a los elementos creados por cada usuario. Concede al grupo interno de Planeación permiso de edición sobre todos los elementos.
