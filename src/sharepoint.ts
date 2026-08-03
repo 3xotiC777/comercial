@@ -51,11 +51,12 @@ async function getContext(accessToken:string) {
   const lists = await graph(`/sites/${site.id}/lists?$select=id,displayName`,accessToken)
   const list = lists.value.find((x:{displayName:string})=>norm(x.displayName)==='comercialplaneacion')
   if (!list) throw new Error('No encontré la lista “Comercial planeacion”.')
-  const columnsResponse = await graph(`/sites/${site.id}/lists/${list.id}/columns?$select=name,displayName`,accessToken)
+  const columnsResponse = await graph(`/sites/${site.id}/lists/${list.id}/columns?$select=name,displayName,readOnly,hidden`,accessToken)
   const drives = await graph(`/sites/${site.id}/drives?$select=id,name`,accessToken)
   const drive = drives.value.find((x:{name:string})=>norm(x.name)==='comercialplaneacionproyecto')
   if (!drive) throw new Error('No encontré la biblioteca “Comercial planeacion proyecto”.')
-  const columns = new Map<string,string>(columnsResponse.value.map((x:{name:string;displayName:string})=>[norm(x.displayName),x.name]))
+  const writableColumns = columnsResponse.value.filter((x:{name:string;readOnly?:boolean;hidden?:boolean})=>!x.readOnly&&!x.hidden&&x.name!=='DocIcon')
+  const columns = new Map<string,string>(writableColumns.map((x:{name:string;displayName:string})=>[norm(x.displayName),x.name]))
   context={siteId:site.id,listId:list.id,driveId:drive.id,columns}; return context
 }
 
