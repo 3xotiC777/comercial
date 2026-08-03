@@ -27,13 +27,18 @@ async function token(interactive=false) {
   if (!account && interactive) account = (await msal.loginPopup({scopes})).account || undefined
   if (!account) return null
   msal.setActiveAccount(account)
-  try { return (await msal.acquireTokenSilent({scopes,account})).accessToken }
+  try { return (await msal.acquireTokenSilent({scopes,account,forceRefresh:true})).accessToken }
   catch { return interactive ? (await msal.acquireTokenPopup({scopes,account})).accessToken : null }
 }
 async function graph(path:string, accessToken:string, init:RequestInit={}) {
   const headers = new Headers(init.headers); headers.set('Authorization',`Bearer ${accessToken}`); headers.set('Content-Type','application/json')
   const response = await fetch(`https://graph.microsoft.com/v1.0${path}`,{...init,headers})
-  if (!response.ok) throw new Error(`SharePoint respondió ${response.status}. Verifica tus permisos en la lista.`)
+  if (!response.ok) {
+    let detail = ''
+    try { const body = await response.clone().json(); detail = body?.error?.message || '' } catch { detail = await response.text() }
+    const resource = path.startsWith('/me') ? 'perfil de Microsoft' : path.includes('/drives') ? 'biblioteca de archivos' : path.includes('/lists') ? 'lista Comercial planeacion' : 'sitio reportingdn'
+    throw new Error(`Microsoft Graph respondió ${response.status} al acceder a ${resource}.${detail ? ` ${detail}` : ''}`)
+  }
   return response.status === 204 ? null : response.json()
 }
 function field(columns:Map<string,string>, key:string) { return aliases[key].map(x=>columns.get(norm(x))).find(Boolean) }
