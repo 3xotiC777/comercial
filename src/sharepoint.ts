@@ -7,7 +7,7 @@ export type Ticket = { id:string; spId:string; created_at:string; requester_name
 const tenantId = '05e4f087-3719-4046-8fa3-286b1f5110f2'
 const clientId = '373c64ec-c8ef-41bf-a2e9-bb2225bceb9a'
 const scopes = ['User.Read', 'Sites.ReadWrite.All']
-const redirectUri = window.location.hostname.endsWith('github.io') ? `${window.location.origin}/comercial/` : `${window.location.origin}/`
+const redirectUri = window.location.hostname.endsWith('github.io') ? `${window.location.origin}/comercial/auth.html` : `${window.location.origin}/auth.html`
 const msal = new PublicClientApplication({ auth:{ clientId, authority:`https://login.microsoftonline.com/${tenantId}`, redirectUri }, cache:{cacheLocation:'sessionStorage'} })
 
 const norm = (value:string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')

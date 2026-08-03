@@ -11,6 +11,8 @@ Ticketera web publicada en GitHub Pages y conectada a SharePoint Online.
 
 No se requieren secretos ni claves privadas para la página. Cada persona inicia sesión con su cuenta corporativa y SharePoint aplica sus permisos.
 
+En Microsoft Entra ID, la aplicación debe registrar como URI de redirección de tipo **Aplicación de página única (SPA)**: `https://3xotic777.github.io/comercial/auth.html`.
+
 ## Notificaciones por correo
 
 Configura dos flujos de Power Automate desde la lista **Comercial planeacion**:
