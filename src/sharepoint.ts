@@ -85,9 +85,56 @@ export async function loadTickets():Promise<Ticket[]> {
   return tickets.map(ticket=>ticket.attachment_name?ticket:{...ticket,attachment_name:discovered.get(ticket.id)})
 }
 
-export async function createTicket(ticket:Ticket,file:File|null) { const accessToken=await token(true); if(!accessToken) throw new Error('Debes iniciar sesión con Microsoft.'); const c=await getContext(accessToken); const fields:Record<string,unknown>={Title:ticket.id}; set(fields,c.columns,'ticket',ticket.id);set(fields,c.columns,'name',ticket.requester_name);set(fields,c.columns,'email',ticket.requester_email);set(fields,c.columns,'country',ticket.country);set(fields,c.columns,'study',ticket.study);set(fields,c.columns,'type',ticket.request_type);set(fields,c.columns,'detail',ticket.detail);set(fields,c.columns,'status',ticket.status);if(file)set(fields,c.columns,'attachment',file.name)
+type UploadProgress = (percent:number)=>void
+const resumableUploadThreshold=10*1024*1024
+const uploadChunkSize=10*1024*1024
+
+const delay=(milliseconds:number)=>new Promise(resolve=>window.setTimeout(resolve,milliseconds))
+
+async function uploadRequestFile(accessToken:string,driveId:string,ticketId:string,file:File,onProgress?:UploadProgress) {
+  await ensureFolder(accessToken,driveId,'',ticketId)
+  onProgress?.(0)
+  const encodedPath=[ticketId,file.name].map(part=>encodeURIComponent(part)).join('/')
+
+  if(file.size<=resumableUploadThreshold){
+    const response=await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodedPath}:/content`,{method:'PUT',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':file.type||'application/octet-stream'},body:file})
+    if(!response.ok)throw new Error(`No se pudo cargar “${file.name}”. La solicitud no fue creada.`)
+    onProgress?.(100)
+    return
+  }
+
+  const session=await graph(`/drives/${driveId}/root:/${encodedPath}:/createUploadSession`,accessToken,{method:'POST',body:JSON.stringify({item:{'@microsoft.graph.conflictBehavior':'replace',name:file.name}})})
+  const uploadUrl=String(session?.uploadUrl||'')
+  if(!uploadUrl)throw new Error('SharePoint no pudo iniciar la carga del archivo grande.')
+
+  for(let start=0;start<file.size;start+=uploadChunkSize){
+    const end=Math.min(start+uploadChunkSize,file.size),chunk=file.slice(start,end)
+    let response:Response|null=null
+    for(let attempt=0;attempt<3;attempt+=1){
+      try{response=await fetch(uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${file.size}`},body:chunk})}catch{response=null}
+      if(response?.ok)break
+      const retryable=!response||response.status===429||response.status>=500
+      if(!retryable||attempt===2)break
+      const retryAfter=Number(response?.headers.get('Retry-After')||0)
+      await delay(retryAfter>0?retryAfter*1000:1000*(2**attempt))
+    }
+    if(!response?.ok){
+      let detail=''
+      try{const body=await response?.clone().json();detail=body?.error?.message||''}catch{}
+      throw new Error(`No se pudo cargar “${file.name}”. La solicitud no fue creada.${detail?` ${detail}`:''}`)
+    }
+    onProgress?.(Math.round(end/file.size*100))
+  }
+}
+
+export async function createTicket(ticket:Ticket,file:File|null,onProgress?:UploadProgress) {
+  const accessToken=await token(true);if(!accessToken)throw new Error('Debes iniciar sesión con Microsoft.')
+  const c=await getContext(accessToken)
+  if(file)await uploadRequestFile(accessToken,c.driveId,ticket.id,file,onProgress)
+
+  const fields:Record<string,unknown>={Title:ticket.id}
+  set(fields,c.columns,'ticket',ticket.id);set(fields,c.columns,'name',ticket.requester_name);set(fields,c.columns,'email',ticket.requester_email);set(fields,c.columns,'country',ticket.country);set(fields,c.columns,'study',ticket.study);set(fields,c.columns,'type',ticket.request_type);set(fields,c.columns,'detail',ticket.detail);set(fields,c.columns,'status',ticket.status);if(file)set(fields,c.columns,'attachment',file.name)
   const item=await graph(`/sites/${c.siteId}/lists/${c.listId}/items`,accessToken,{method:'POST',body:JSON.stringify({fields})})
-  if(file){ try { await graph(`/drives/${c.driveId}/root/children`,accessToken,{method:'POST',body:JSON.stringify({name:ticket.id,folder:{},'@microsoft.graph.conflictBehavior':'replace'})}) } catch {} const response=await fetch(`https://graph.microsoft.com/v1.0/drives/${c.driveId}/root:/${encodeURIComponent(ticket.id)}/${encodeURIComponent(file.name)}:/content`,{method:'PUT',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':file.type||'application/octet-stream'},body:file}); if(!response.ok)throw new Error('El ticket se creó, pero no se pudo cargar el archivo.') }
   return {...ticket,spId:item.id}
 }
 
