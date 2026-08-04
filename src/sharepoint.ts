@@ -93,12 +93,16 @@ export async function createTicket(ticket:Ticket,file:File|null) { const accessT
 
 export async function downloadTicketAttachment(ticket:Ticket) {
   if(!ticket.attachment_name)throw new Error('Este ticket no tiene un archivo para descargar.')
-  const accessToken=await token(true);if(!accessToken)throw new Error('Debes iniciar sesión con Microsoft.')
-  const c=await getContext(accessToken),path=[ticket.id,ticket.attachment_name].map(part=>encodeURIComponent(part)).join('/')
-  const item=await graph(`/drives/${c.driveId}/root:/${path}?$select=id,name,@microsoft.graph.downloadUrl`,accessToken),downloadUrl=String(item?.['@microsoft.graph.downloadUrl']||'')
-  if(!downloadUrl)throw new Error('SharePoint no entregó un enlace de descarga para este archivo.')
-  const response=await fetch(downloadUrl);if(!response.ok)throw new Error(`No se pudo descargar “${ticket.attachment_name}”.`)
-  const href=URL.createObjectURL(await response.blob()),link=document.createElement('a');link.href=href;link.download=ticket.attachment_name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),1000)
+  const downloadWindow=window.open('about:blank','_blank');if(!downloadWindow)throw new Error('El navegador bloqueó la descarga. Permite las ventanas emergentes para esta página e inténtalo nuevamente.')
+  downloadWindow.document.title='Preparando descarga';downloadWindow.document.body.textContent=`Preparando ${ticket.attachment_name}…`
+  try{const accessToken=await token(true);if(!accessToken)throw new Error('Debes iniciar sesión con Microsoft.')
+    const c=await getContext(accessToken),path=[ticket.id,ticket.attachment_name].map(part=>encodeURIComponent(part)).join('/')
+    let item=await graph(`/drives/${c.driveId}/root:/${path}?$select=id,name,webUrl,@microsoft.graph.downloadUrl`,accessToken),downloadUrl=String(item?.['@microsoft.graph.downloadUrl']||''),webUrl=String(item?.webUrl||'')
+    if(!downloadUrl&&item?.id){item=await graph(`/drives/${c.driveId}/items/${encodeURIComponent(item.id)}?$select=id,name,webUrl,@microsoft.graph.downloadUrl`,accessToken);downloadUrl=String(item?.['@microsoft.graph.downloadUrl']||'');webUrl=String(item?.webUrl||webUrl)}
+    if(downloadUrl){downloadWindow.location.replace(downloadUrl);return}
+    if(webUrl){const fallback=new URL(webUrl);fallback.searchParams.delete('web');fallback.searchParams.set('download','1');downloadWindow.location.replace(fallback.toString());return}
+    throw new Error('SharePoint encontró el archivo, pero no entregó una ruta para abrirlo.')
+  }catch(error){downloadWindow.close();throw error}
 }
 export async function updateTicket(ticket:Ticket, patch:Partial<Ticket>) {
   const accessToken=await token(true); if(!accessToken) throw new Error('Debes iniciar sesión con Microsoft.')
