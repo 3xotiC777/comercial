@@ -23,6 +23,60 @@
   color: #617b89;
 }
 
+.request-attachment {
+  display: inline-grid;
+  grid-template-columns: 34px minmax(0, auto) 22px;
+  align-items: center;
+  gap: 8px;
+  max-width: min(100%, 360px);
+  margin-top: 9px;
+  padding: 6px 8px 6px 6px;
+  border: 1px solid #d6e5e9;
+  border-radius: 4px;
+  background: #f5fafb;
+  color: #174f73;
+  text-align: left;
+  transition: .2s;
+}
+
+.request-attachment:hover {
+  border-color: #2476a8;
+  background: #eaf5f8;
+  color: #093e65;
+  transform: translateY(-1px);
+}
+
+.request-attachment:disabled {
+  cursor: wait;
+  opacity: .65;
+  transform: none;
+}
+
+.request-attachment span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 30px;
+  border-radius: 3px;
+  background: #0d6197;
+  color: #fff;
+  font: 8px 'DM Mono';
+}
+
+.request-attachment b {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-attachment i {
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: center;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

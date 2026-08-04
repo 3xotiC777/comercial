@@ -74,6 +74,16 @@ export async function createTicket(ticket:Ticket,file:File|null) { const accessT
   if(file){ try { await graph(`/drives/${c.driveId}/root/children`,accessToken,{method:'POST',body:JSON.stringify({name:ticket.id,folder:{},'@microsoft.graph.conflictBehavior':'replace'})}) } catch {} const response=await fetch(`https://graph.microsoft.com/v1.0/drives/${c.driveId}/root:/${encodeURIComponent(ticket.id)}/${encodeURIComponent(file.name)}:/content`,{method:'PUT',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':file.type||'application/octet-stream'},body:file}); if(!response.ok)throw new Error('El ticket se creó, pero no se pudo cargar el archivo.') }
   return {...ticket,spId:item.id}
 }
+
+export async function downloadTicketAttachment(ticket:Ticket) {
+  if(!ticket.attachment_name)throw new Error('Este ticket no tiene un archivo para descargar.')
+  const accessToken=await token(true);if(!accessToken)throw new Error('Debes iniciar sesión con Microsoft.')
+  const c=await getContext(accessToken),path=[ticket.id,ticket.attachment_name].map(part=>encodeURIComponent(part)).join('/')
+  const item=await graph(`/drives/${c.driveId}/root:/${path}?$select=id,name,@microsoft.graph.downloadUrl`,accessToken),downloadUrl=String(item?.['@microsoft.graph.downloadUrl']||'')
+  if(!downloadUrl)throw new Error('SharePoint no entregó un enlace de descarga para este archivo.')
+  const response=await fetch(downloadUrl);if(!response.ok)throw new Error(`No se pudo descargar “${ticket.attachment_name}”.`)
+  const href=URL.createObjectURL(await response.blob()),link=document.createElement('a');link.href=href;link.download=ticket.attachment_name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),1000)
+}
 export async function updateTicket(ticket:Ticket, patch:Partial<Ticket>) {
   const accessToken=await token(true); if(!accessToken) throw new Error('Debes iniciar sesión con Microsoft.')
   const c=await getContext(accessToken), fields:Record<string,unknown>={}
