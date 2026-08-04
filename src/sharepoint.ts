@@ -25,11 +25,11 @@ let context: {siteId:string;listId:string;driveId:string;columns:Map<string,stri
 async function token(interactive=false) {
   await msal.initialize()
   let account = msal.getActiveAccount() || msal.getAllAccounts()[0]
-  if (!account && interactive) account = (await msal.loginPopup({scopes})).account || undefined
+  if (!account && interactive) account = (await msal.loginPopup({scopes,overrideInteractionInProgress:true})).account || undefined
   if (!account) return null
   msal.setActiveAccount(account)
   try { return (await msal.acquireTokenSilent({scopes,account,forceRefresh:true})).accessToken }
-  catch { return interactive ? (await msal.acquireTokenPopup({scopes,account})).accessToken : null }
+  catch { return interactive ? (await msal.acquireTokenPopup({scopes,account,overrideInteractionInProgress:true})).accessToken : null }
 }
 async function graph(path:string, accessToken:string, init:RequestInit={}) {
   const headers = new Headers(init.headers); headers.set('Authorization',`Bearer ${accessToken}`); headers.set('Content-Type','application/json')
