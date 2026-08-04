@@ -12,13 +12,14 @@ const msal = new PublicClientApplication({ auth:{ clientId, authority:`https://l
 
 const norm = (value:string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
 const aliases:Record<string,string[]> = {
-  ticket: ['Ticket','Id de ticket','Ticket id','Id ticket'],
+  ticket: ['Título','Titulo','Title','Ticket','Id de ticket','Ticket id','Id ticket'],
   name: ['Solicitante','Nombre solicitante','Nombre completo','Nombre'],
   email: ['Correo','Correo solicitante','Correo corporativo','Email'],
   country: ['Pais','País'], study: ['Estudio'], type: ['Tipo de solicitud','Tipo'],
   detail: ['Detalle','Detalle de solicitud','Solicitud'], status: ['Estado'],
   assignee: ['Responsable','Analista'], attachment: ['Archivo','Adjunto','Insumo'],
 }
+const fallbackFields:Record<string,string> = {ticket:'Title',status:'estado',assignee:'responsable'}
 let context: {siteId:string;listId:string;driveId:string;columns:Map<string,string>} | null = null
 
 async function token(interactive=false) {
@@ -41,7 +42,7 @@ async function graph(path:string, accessToken:string, init:RequestInit={}) {
   }
   return response.status === 204 ? null : response.json()
 }
-function field(columns:Map<string,string>, key:string) { return aliases[key].map(x=>columns.get(norm(x))).find(Boolean) }
+function field(columns:Map<string,string>, key:string) { return aliases[key].map(x=>columns.get(norm(x))).find(Boolean) || fallbackFields[key] }
 function value(fields:Record<string,unknown>, columns:Map<string,string>, key:string) { const name=field(columns,key); return name ? String(fields[name] ?? '') : '' }
 function set(fields:Record<string,unknown>, columns:Map<string,string>, key:string, data:unknown) { const name=field(columns,key); if(name) fields[name]=data }
 
@@ -70,4 +71,13 @@ export async function createTicket(ticket:Ticket,file:File|null) { const accessT
   if(file){ try { await graph(`/drives/${c.driveId}/root/children`,accessToken,{method:'POST',body:JSON.stringify({name:ticket.id,folder:{},'@microsoft.graph.conflictBehavior':'replace'})}) } catch {} const response=await fetch(`https://graph.microsoft.com/v1.0/drives/${c.driveId}/root:/${encodeURIComponent(ticket.id)}/${encodeURIComponent(file.name)}:/content`,{method:'PUT',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':file.type||'application/octet-stream'},body:file}); if(!response.ok)throw new Error('El ticket se creó, pero no se pudo cargar el archivo.') }
   return {...ticket,spId:item.id}
 }
-export async function updateTicket(ticket:Ticket, patch:Partial<Ticket>) { const accessToken=await token(true); if(!accessToken) throw new Error('Debes iniciar sesión con Microsoft.'); const c=await getContext(accessToken); const fields:Record<string,unknown>={};if(patch.status)set(fields,c.columns,'status',patch.status);if(patch.assignee!==undefined)set(fields,c.columns,'assignee',patch.assignee);await graph(`/sites/${c.siteId}/lists/${c.listId}/items/${ticket.spId}/fields`,accessToken,{method:'PATCH',body:JSON.stringify(fields)}) }
+export async function updateTicket(ticket:Ticket, patch:Partial<Ticket>) {
+  const accessToken=await token(true); if(!accessToken) throw new Error('Debes iniciar sesión con Microsoft.')
+  const c=await getContext(accessToken), fields:Record<string,unknown>={}
+  const statusField=field(c.columns,'status'), assigneeField=field(c.columns,'assignee')
+  if(patch.status&&statusField)fields[statusField]=patch.status
+  if(patch.assignee!==undefined&&assigneeField)fields[assigneeField]=patch.assignee
+  const updated=await graph(`/sites/${c.siteId}/lists/${c.listId}/items/${ticket.spId}/fields`,accessToken,{method:'PATCH',body:JSON.stringify(fields)})
+  if(patch.status&&statusField&&String(updated?.[statusField]??'')!==patch.status)throw new Error('SharePoint no confirmó el cambio de estado.')
+  if(patch.assignee!==undefined&&assigneeField&&String(updated?.[assigneeField]??'')!==patch.assignee)throw new Error('SharePoint no confirmó el cambio de responsable.')
+}
