@@ -5,7 +5,12 @@ import type { Analyst, Status, Ticket } from './sharepoint'
 import './App.css'
 
 const analysts = ['Diego','Miguel','Rony'] as const
-const adminEmails = ['dmontoya@dichter-neira.com']
+const adminEmails = [
+  'dmontoya@dichter-neira.com',
+  'fvillalba@dichter-neira.com',
+  'mcabezas@dichter-neira.com',
+  'rrodriguez@dichter-neira.com',
+]
 const catalog:Record<string,string[]>={
   'BOLIVIA':['P&G'],'CHILE':['COCA COLA (KO TRD)'],'COLOMBIA':['NESTLE (DSD)','NESTLE (ISD)','NESTLE (UTT)','SAMSUNG','COCA COLA (KO MD)-PLANOGRAMA','COCA COLA (KO MD)'],'COSTA RICA':['CARGILL','COCA COLA (KO MD)','COCA COLA (KO TRD)','FIFCO MOD','FIFCO TRD','NESTLE','P&G'],'ECUADOR':['CBC - EC','COCA COLA (KO TRD)','P&G','CBC EC','P&G_SC'],'EL SALVADOR':['COCA COLA (KO MD)','COCA COLA (KO TRD)','NESTLE','P&G','CERVECERIA','ABI CRECE'],'GUATEMALA':['CBC - GM','COCA COLA (KO MD)- ABVO','COCA COLA (KO MD)- EMBO','COCA COLA (KO TRD)- ABVO','COCA COLA (KO TRD)- EMBO','NESTLE','P&G','CBC GT'],'HONDURAS':['COCA COLA (KO MD)','COCA COLA (KO TRD)','NESTLE','P&G','CERVECERIA','ABI CRECE','CBC - HN'],'NICARAGUA':['COCA COLA (KO MD)','COCA COLA (KO TRD)','NESTLE','P&G'],'PANAMA':['COCA COLA (KO MD)','COCA COLA (KO TRD)','HEINEKEN','NESTLE','P&G','REPRICO'],'PARAGUAY':['P&G'],'PERU':['ABI','ABI DAS','GLORIA','LINDLEY','STOREVIEW ABI PERU','STOREVIEW MD IRT ABI PERU','CBC MYSTERY','GLORIA SV TRADICIONAL','GLORIA SC TRADICIONAL','AJE','Lindley - Auditor'],'REPUBLICA DOMINICANA':['COCA COLA (KO MD)','COCA COLA (KO TRD)','CORRIPIO','P&G','INDUVECA','PEPSI','INDUSTRIA SAN MIGUEL'],'URUGUAY':['P&G'],'VENEZUELA':['COCA COLA (KO TRD)']
 }
