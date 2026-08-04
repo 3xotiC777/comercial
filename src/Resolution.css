@@ -105,9 +105,52 @@
   font-weight: 800;
 }
 
-.solution-label textarea {
+.solution-editor {
   min-height: 170px;
+  max-height: 390px;
+  overflow: auto;
+  padding: 13px 14px;
+  border: 1px solid #d7e1e5;
+  border-radius: 3px;
+  outline: none;
+  background: #fbfcfc;
+  color: #152e44;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.55;
+  transition: .2s;
+}
+
+.solution-editor:focus {
+  border-color: #1769a6;
+  box-shadow: 0 0 0 3px #0d619317;
+}
+
+.solution-editor:empty::before {
+  color: #8b9aa3;
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.solution-editor img {
+  display: block;
+  max-width: 100%;
+  max-height: 300px;
+  height: auto;
+  margin: 14px 0;
+  border: 2px solid #d9e6ea;
+  border-radius: 5px;
+  box-shadow: 0 6px 18px #1338521c;
+}
+
+.solution-editor img:hover {
+  border-color: #2475aa;
+}
+
+.processing-images {
+  color: #176495;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .attachment-tools {

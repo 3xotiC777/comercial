@@ -86,23 +86,25 @@ export async function updateTicket(ticket:Ticket, patch:Partial<Ticket>) {
 }
 
 async function ensureFolder(accessToken:string, driveId:string, parentPath:string, name:string) {
-  const path=[parentPath,name].filter(Boolean).map(part=>encodeURIComponent(part)).join('/'), endpoint=parentPath ? `/drives/${driveId}/root:/${encodeURIComponent(parentPath)}:/children` : `/drives/${driveId}/root/children`
+  const encodedParent=parentPath.split('/').filter(Boolean).map(part=>encodeURIComponent(part)).join('/'), path=[encodedParent,encodeURIComponent(name)].filter(Boolean).join('/'), endpoint=parentPath ? `/drives/${driveId}/root:/${encodedParent}:/children` : `/drives/${driveId}/root/children`
   try { await graph(`/drives/${driveId}/root:/${path}`,accessToken);return } catch (error) { if(!(error instanceof Error)||!error.message.includes('respondió 404'))throw error }
   await graph(endpoint,accessToken,{method:'POST',body:JSON.stringify({name,folder:{},'@microsoft.graph.conflictBehavior':'fail'})})
 }
 
-async function uploadSolutionFile(accessToken:string, driveId:string, ticketId:string, file:File) {
-  const response=await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURIComponent(ticketId)}/Solucion/${encodeURIComponent(file.name)}:/content`,{method:'PUT',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':file.type||'application/octet-stream'},body:file})
+async function uploadSolutionFile(accessToken:string, driveId:string, ticketId:string, folder:'Adjuntos'|'Inline', file:File) {
+  const response=await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURIComponent(ticketId)}/Solucion/${folder}/${encodeURIComponent(file.name)}:/content`,{method:'PUT',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':file.type||'application/octet-stream'},body:file})
   if(!response.ok){let detail='';try{const body=await response.json();detail=body?.error?.message||''}catch{}throw new Error(`No se pudo cargar “${file.name}”.${detail?` ${detail}`:''}`)}
 }
 
-export async function finalizeTicket(ticket:Ticket, resolution:string, files:File[]) {
+export async function finalizeTicket(ticket:Ticket, resolution:string, files:File[], inlineFiles:File[]) {
   const accessToken=await token(true); if(!accessToken) throw new Error('Debes iniciar sesión con Microsoft.')
   const c=await getContext(accessToken)
   const statusField=field(c.columns,'status'), resolutionField=field(c.columns,'resolution')
   if(!resolutionField) throw new Error('Falta la columna “Solución” en la lista Comercial planeacion. Créala como “Varias líneas de texto” y vuelve a intentarlo.')
 
-  if(files.length){await ensureFolder(accessToken,c.driveId,'',ticket.id);await ensureFolder(accessToken,c.driveId,ticket.id,'Solucion');for(const file of files)await uploadSolutionFile(accessToken,c.driveId,ticket.id,file)}
+  await ensureFolder(accessToken,c.driveId,'',ticket.id);await ensureFolder(accessToken,c.driveId,ticket.id,'Solucion');await ensureFolder(accessToken,c.driveId,`${ticket.id}/Solucion`,'Adjuntos');await ensureFolder(accessToken,c.driveId,`${ticket.id}/Solucion`,'Inline')
+  for(const file of files)await uploadSolutionFile(accessToken,c.driveId,ticket.id,'Adjuntos',file)
+  for(const file of inlineFiles)await uploadSolutionFile(accessToken,c.driveId,ticket.id,'Inline',file)
 
   const completedAt=new Date().toISOString(), fields:Record<string,unknown>={}
   fields[resolutionField]=resolution

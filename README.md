@@ -22,8 +22,9 @@ Configura dos flujos de Power Automate desde la lista **Comercial planeacion**:
 
 ### Cierre con solución
 
-La ventana de cierre guarda la respuesta en la lista y los archivos en
-`Comercial planeacion proyecto/{Ticket}/Solucion`. Para activarla, agrega estas
+La ventana de cierre guarda la respuesta en la lista y separa el contenido en
+`{Ticket}/Solucion/Inline` para imágenes pegadas dentro del texto y
+`{Ticket}/Solucion/Adjuntos` para Excel, PDF y otros archivos. Para activarla, agrega estas
 columnas a la lista **Comercial planeacion**:
 
 - `Solución`: varias líneas de texto, texto sin formato. Obligatoria para cerrar desde la aplicación.
@@ -31,10 +32,15 @@ columnas a la lista **Comercial planeacion**:
 - `Fecha finalización`: fecha y hora. Permite calcular el tiempo promedio real del panel.
 
 Después actualiza el flujo **Cuando se modifique un elemento** para que, cuando
-`Estado` sea `Finalizado`, incluya `Solución` en el cuerpo del correo y adjunte
-los archivos encontrados en la carpeta `{Título}/Solucion` de la biblioteca.
+`Estado` sea `Finalizado`, tome el HTML de `Solución`, reemplace cada dirección
+`inline://nombre-de-imagen` por el contenido Base64 del archivo correspondiente
+en `{Título}/Solucion/Inline`, y adjunte los archivos encontrados en
+`{Título}/Solucion/Adjuntos`.
 La aplicación carga primero los archivos y cambia el estado al final, por lo que
 Power Automate siempre recibe un cierre completo.
+
+La aplicación optimiza cada imagen pegada a menos de 700 KB. Esto mantiene su
+URI Base64 por debajo del límite de 1 MB del conector de correo de Office 365.
 
 En pruebas, Diego, Miguel y Rony se asignan en la interfaz. Antes de producción, agrega sus correos al flujo de Power Automate y al arreglo `adminEmails` en `src/TicketApp.tsx`.
 
