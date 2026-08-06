@@ -1,4 +1,5 @@
 name: Publicar en GitHub Pages
+run-name: Publicar versión 1.0.${{ github.run_number }}
 on:
   push:
     branches: [main]
@@ -22,6 +23,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
         env:
+          VITE_APP_VERSION: 1.0.${{ github.run_number }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_TEAM_EMAIL: ${{ secrets.VITE_TEAM_EMAIL }}
