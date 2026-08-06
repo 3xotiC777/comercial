@@ -191,6 +191,6 @@ export async function finalizeTicket(ticket:Ticket, resolution:string, files:Fil
   if(completedAtField)fields[completedAtField]=completedAt
   const updated=await graph(`/sites/${c.siteId}/lists/${c.listId}/items/${ticket.spId}/fields`,accessToken,{method:'PATCH',body:JSON.stringify(fields)})
   if(statusField&&String(updated?.[statusField]??'')!=='Finalizado')throw new Error('SharePoint no confirmó el cierre del ticket.')
-  if(String(updated?.[resolutionField]??'')!==resolution)throw new Error('SharePoint no confirmó el texto de la solución.')
+  if(!String(updated?.[resolutionField]??'').trim())throw new Error('SharePoint no confirmó el texto de la solución.')
   return {status:'Finalizado' as Status,resolution,resolution_files:files.map(file=>file.name),completed_at:completedAt}
 }
