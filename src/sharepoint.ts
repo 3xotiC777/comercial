@@ -183,13 +183,15 @@ export async function finalizeTicket(ticket:Ticket, resolution:string, files:Fil
   for(const file of files)await uploadSolutionFile(accessToken,c.driveId,ticket.id,'Adjuntos',file)
   for(const file of inlineFiles)await uploadSolutionFile(accessToken,c.driveId,ticket.id,'Inline',file)
 
-  const completedAt=new Date().toISOString(), fields:Record<string,unknown>={}
-  fields[resolutionField]=resolution
-  if(statusField)fields[statusField]='Finalizado'
+  const endpoint=`/sites/${c.siteId}/lists/${c.listId}/items/${ticket.spId}/fields`,completedAt=new Date().toISOString()
+  let savedSolution:Record<string,unknown>
+  try{savedSolution=await graph(endpoint,accessToken,{method:'PATCH',body:JSON.stringify({[resolutionField]:resolution})})}catch(error){throw new Error(`No se pudo guardar la solución en SharePoint.${error instanceof Error?` ${error.message}`:''}`)}
+  if(!String(savedSolution?.[resolutionField]??'').trim())throw new Error('SharePoint no confirmó el texto de la solución.')
+
   const completedAtField=field(c.columns,'completedAt')
-  if(completedAtField)fields[completedAtField]=completedAt
-  const updated=await graph(`/sites/${c.siteId}/lists/${c.listId}/items/${ticket.spId}/fields`,accessToken,{method:'PATCH',body:JSON.stringify(fields)})
-  if(statusField&&String(updated?.[statusField]??'')!=='Finalizado')throw new Error('SharePoint no confirmó el cierre del ticket.')
-  if(!String(updated?.[resolutionField]??'').trim())throw new Error('SharePoint no confirmó el texto de la solución.')
+  if(completedAtField){try{await graph(endpoint,accessToken,{method:'PATCH',body:JSON.stringify({[completedAtField]:completedAt})})}catch{/* La fecha es opcional: no debe bloquear el envío de la solución. */}}
+
+  let updated:Record<string,unknown>=savedSolution
+  if(statusField){try{updated=await graph(endpoint,accessToken,{method:'PATCH',body:JSON.stringify({[statusField]:'Finalizado'})})}catch(error){throw new Error(`La solución se guardó, pero no se pudo cambiar el estado a Finalizado.${error instanceof Error?` ${error.message}`:''}`)}if(String(updated?.[statusField]??'')!=='Finalizado')throw new Error('SharePoint no confirmó el cierre del ticket.')}
   return {status:'Finalizado' as Status,resolution,resolution_files:files.map(file=>file.name),completed_at:completedAt}
 }
