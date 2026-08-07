@@ -48,7 +48,7 @@ function Dash({tickets,update,download,complete,signOut}:{tickets:Ticket[];updat
 function AttachmentDownload({ticket,download}:{ticket:Ticket;download:(ticket:Ticket)=>Promise<void>}){const [busy,setBusy]=useState(false),extension=ticket.attachment_name?.split('.').pop()?.toUpperCase().slice(0,4)||'FILE';return <button className="request-attachment" type="button" disabled={busy} title={`Descargar ${ticket.attachment_name}`} onClick={async()=>{setBusy(true);await download(ticket);setBusy(false)}}><span>{extension}</span><b>{busy?'Descargando…':ticket.attachment_name}</b><i>↓</i></button>}
 
 const maxEmailBytes=20*1024*1024
-const maxInlineBytes=700*1024
+const maxInlineBytes=220*1024
 const sizeLabel=(bytes:number)=>bytes<1024*1024?`${Math.max(1,Math.round(bytes/1024))} KB`:`${(bytes/1024/1024).toFixed(1)} MB`
 type InlineImage={id:string;file:File;filename:string;preview:string}
 
@@ -59,7 +59,7 @@ const inlineImageCount=(html:string)=>(html.match(/src="inline:\/\//g)||[]).leng
 async function prepareInlineImage(source:File,id:string){
   const supported:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/gif':'gif'}
   if(source.size<=maxInlineBytes&&supported[source.type])return new File([source],`inline-${id}.${supported[source.type]}`,{type:source.type,lastModified:Date.now()})
-  const bitmap=await createImageBitmap(source);let scale=Math.min(1,1600/bitmap.width),quality=.86,blob:Blob|null=null
+  const bitmap=await createImageBitmap(source);let scale=Math.min(1,1000/bitmap.width),quality=.86,blob:Blob|null=null
   for(let attempt=0;attempt<10;attempt++){const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const context=canvas.getContext('2d');if(!context){bitmap.close();throw new Error('No se pudo procesar la imagen pegada.')}context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));if(blob&&blob.size<=maxInlineBytes)break;if(quality>.58)quality-=.08;else{scale*=.78;quality=.8}}
   bitmap.close();if(!blob||blob.size>maxInlineBytes)throw new Error('La imagen pegada es demasiado grande para incrustarla en el correo.')
   return new File([blob],`inline-${id}.jpg`,{type:'image/jpeg',lastModified:Date.now()})
