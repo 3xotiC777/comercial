@@ -186,8 +186,7 @@ export async function finalizeTicket(ticket:Ticket, resolution:string, files:Fil
   const completedAt=new Date().toISOString(), fields:Record<string,unknown>={}
   fields[resolutionField]=resolution
   if(statusField)fields[statusField]='Finalizado'
-  const filesField=field(c.columns,'resolutionFiles'), completedAtField=field(c.columns,'completedAt')
-  if(filesField)fields[filesField]=files.map(file=>file.name).join('; ')
+  const completedAtField=field(c.columns,'completedAt')
   if(completedAtField)fields[completedAtField]=completedAt
   const updated=await graph(`/sites/${c.siteId}/lists/${c.listId}/items/${ticket.spId}/fields`,accessToken,{method:'PATCH',body:JSON.stringify(fields)})
   if(statusField&&String(updated?.[statusField]??'')!=='Finalizado')throw new Error('SharePoint no confirmó el cierre del ticket.')
