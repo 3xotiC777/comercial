@@ -321,7 +321,7 @@ export async function loadTickets(): Promise<Ticket[]> {
   if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");
   const c = await getContext(accessToken),
     items = await graph(
-      `/sites/${c.siteId}/lists/${c.listId}/items?expand=fields&top=999`,
+      `/sites/${c.siteId}/lists/${c.listId}/items?$expand=fields&$top=999`,
       accessToken,
     );
   const tickets: Ticket[] = items.value
