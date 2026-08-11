@@ -285,6 +285,7 @@ export default function TicketApp() {
 
 function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
   const [requestType, setRequestType] = useState(""),
+    [business, setBusiness] = useState(""),
     [country, setCountry] = useState(""),
     [study, setStudy] = useState(""),
     [file, setFile] = useState<File | null>(null),
@@ -307,6 +308,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
       requester_email: String(data.get("email")),
       country,
       study: studyNotRequired ? "" : study,
+      business,
       request_type: requestType,
       detail: String(data.get("detail")),
       status: "Pendiente",
@@ -317,6 +319,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
       onCreated(await createTicket(ticket, file, setUploadProgress));
       form.reset();
       setRequestType("");
+      setBusiness("");
       setCountry("");
       setStudy("");
       setFile(null);
@@ -385,6 +388,18 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
               required
               placeholder="nombre@dichter-neira.com"
             />
+          </label>
+          <label>
+            Negocio*
+            <select
+              value={business}
+              onChange={(event) => setBusiness(event.target.value)}
+              required
+            >
+              <option value="">Selecciona el negocio</option>
+              <option value="Trade">Trade</option>
+              <option value="Customer">Customer</option>
+            </select>
           </label>
           <label>
             Tipo de solicitud*
@@ -830,6 +845,7 @@ function Dash({
               <div className="info">
                 <div>
                   <i>{ticket.request_type}</i>
+                  {ticket.business && <i>{ticket.business}</i>}
                   <b>
                     {[ticket.study, ticket.country].filter(Boolean).join(" · ")}
                   </b>

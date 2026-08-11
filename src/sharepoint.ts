@@ -14,6 +14,7 @@ export type Ticket = {
   requester_email: string;
   country: string;
   study: string;
+  business: string;
   request_type: string;
   detail: string;
   status: Status;
@@ -59,6 +60,7 @@ const aliases: Record<string, string[]> = {
   email: ["Correo", "Correo solicitante", "Correo corporativo", "Email"],
   country: ["Pais", "País"],
   study: ["Estudio"],
+  business: ["Negocio", "Business"],
   type: ["Tipo de solicitud", "Tipo"],
   detail: ["Detalle", "Detalle de solicitud", "Solicitud"],
   status: ["Estado"],
@@ -342,6 +344,7 @@ export async function loadTickets(): Promise<Ticket[]> {
           requester_email: value(item.fields, c.columns, "email"),
           country: value(item.fields, c.columns, "country"),
           study: value(item.fields, c.columns, "study"),
+          business: value(item.fields, c.columns, "business"),
           request_type: value(item.fields, c.columns, "type"),
           detail: value(item.fields, c.columns, "detail"),
           status: (value(item.fields, c.columns, "status") ||
@@ -484,6 +487,7 @@ export async function createTicket(
   set(fields, c.columns, "email", ticket.requester_email);
   set(fields, c.columns, "country", ticket.country);
   set(fields, c.columns, "study", ticket.study);
+  set(fields, c.columns, "business", ticket.business);
   set(fields, c.columns, "type", ticket.request_type);
   set(fields, c.columns, "detail", ticket.detail);
   set(fields, c.columns, "status", ticket.status);
