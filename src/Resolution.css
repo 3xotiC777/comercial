@@ -101,6 +101,58 @@
   animation: modal-in .3s cubic-bezier(.2, .8, .2, 1);
 }
 
+.request-detail-modal { width: min(760px, 100%); }
+.request-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 17px 0 9px;
+}
+.request-detail-meta span {
+  padding: 5px 7px;
+  background: #eaf5f8;
+  color: #0c598e;
+  font: 10px 'DM Mono';
+  text-transform: uppercase;
+}
+.request-detail-content {
+  min-height: 150px;
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #dce6e9;
+  background: #fbfcfc;
+  color: #1c354a;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.request-detail-content > div { margin-bottom: 12px; }
+.request-detail-content > div:last-child { margin-bottom: 0; }
+.request-detail-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 16px 0;
+  border: 1px solid #d4e1e6;
+  border-radius: 4px;
+  box-shadow: 0 8px 20px #12344b18;
+}
+.missing-inline-image {
+  display: inline-block;
+  padding: 8px 10px;
+  border: 1px dashed #c3d4da;
+  color: #6d8490;
+  font-size: 11px;
+}
+.request-detail-download {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  margin-top: 18px;
+  color: #526d7d;
+  font-size: 11px;
+}
+
 @keyframes backdrop-in {
   from { opacity: 0; }
   to { opacity: 1; }

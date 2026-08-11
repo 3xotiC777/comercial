@@ -467,6 +467,7 @@ async function uploadRequestFile(
 export async function createTicket(
   ticket: Ticket,
   file: File | null,
+  inlineFiles: File[] = [],
   onProgress?: UploadProgress,
 ) {
   const accessToken = await token(true);
@@ -480,6 +481,18 @@ export async function createTicket(
       file,
       onProgress,
     );
+  if (inlineFiles.length) {
+    await ensureFolder(accessToken, c.driveId, "", ticket.id);
+    await ensureFolder(accessToken, c.driveId, ticket.id, "Solicitud");
+    await ensureFolder(
+      accessToken,
+      c.driveId,
+      `${ticket.id}/Solicitud`,
+      "Inline",
+    );
+    for (const inlineFile of inlineFiles)
+      await uploadRequestInlineFile(accessToken, c.driveId, ticket.id, inlineFile);
+  }
 
   const fields: Record<string, unknown> = { Title: ticket.id };
   set(fields, c.columns, "ticket", ticket.id);
@@ -498,6 +511,55 @@ export async function createTicket(
     { method: "POST", body: JSON.stringify({ fields }) },
   );
   return { ...ticket, spId: item.id };
+}
+
+async function uploadRequestInlineFile(
+  accessToken: string,
+  driveId: string,
+  ticketId: string,
+  file: File,
+) {
+  const path = [ticketId, "Solicitud", "Inline", file.name]
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${path}:/content`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: file,
+    },
+  );
+  if (!response.ok)
+    throw new Error("No se pudo guardar una imagen incluida en la solicitud.");
+}
+
+export async function loadRequestInlineImages(ticket: Ticket) {
+  const names = [...ticket.detail.matchAll(/src=["']inline:\/\/([^"']+)["']/gi)]
+    .map((match) => decodeURIComponent(match[1]))
+    .filter((name, index, all) => name && all.indexOf(name) === index);
+  if (!names.length) return new Map<string, string>();
+  const accessToken = await token(true);
+  if (!accessToken) throw new Error("Debes iniciar sesiÃ³n con Microsoft.");
+  const c = await getContext(accessToken);
+  const entries = await Promise.all(
+    names.map(async (name) => {
+      const path = [ticket.id, "Solicitud", "Inline", name]
+        .map((part) => encodeURIComponent(part))
+        .join("/");
+      const response = await fetch(
+        `https://graph.microsoft.com/v1.0/drives/${c.driveId}/root:/${path}:/content`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (!response.ok)
+        throw new Error(`No se pudo cargar una imagen de ${ticket.id}.`);
+      return [name, URL.createObjectURL(await response.blob())] as const;
+    }),
+  );
+  return new Map(entries);
 }
 
 export async function downloadTicketAttachment(ticket: Ticket) {

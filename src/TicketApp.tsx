@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ClipboardEvent, FormEvent } from "react";
+import type { ClipboardEvent, FormEvent, ReactNode } from "react";
 import {
   createTicket,
   downloadTicketAttachment,
   finalizeTicket,
+  loadRequestInlineImages,
   loadTickets,
   normalizeAnalyst,
   signIn,
@@ -290,12 +291,84 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
     [study, setStudy] = useState(""),
     [file, setFile] = useState<File | null>(null),
     [sending, setSending] = useState(false),
-    [uploadProgress, setUploadProgress] = useState<number | null>(null);
+    [uploadProgress, setUploadProgress] = useState<number | null>(null),
+    [images, setImages] = useState<InlineImage[]>([]),
+    [processing, setProcessing] = useState(0),
+    [detailError, setDetailError] = useState("");
+  const detailEditor = useRef<HTMLDivElement>(null);
+  const detailInput = useRef<HTMLTextAreaElement>(null);
+  const previewUrls = useRef<string[]>([]);
   const studies = useMemo(() => catalog[country] || [], [country]);
   const studyNotRequired =
     requestType === "Cotizaciones" || requestType === "Otros";
+  useEffect(() => {
+    const urls = previewUrls.current;
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+  const pasteDetail = async (event: ClipboardEvent<HTMLDivElement>) => {
+    if (!detailEditor.current) return;
+    event.preventDefault();
+    const sources = Array.from(event.clipboardData.items)
+        .filter((item) => item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter((item): item is File => Boolean(item)),
+      range = editorRange(detailEditor.current),
+      text = event.clipboardData.getData("text/plain");
+    if (text) insertPlainText(range, text);
+    if (!sources.length) return;
+    const marker = document.createElement("span");
+    marker.dataset.pasteMarker = "true";
+    range.insertNode(marker);
+    setProcessing((current) => current + sources.length);
+    for (const source of sources) {
+      try {
+        const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+        const file = await prepareInlineImage(source, id);
+        const preview = URL.createObjectURL(file);
+        previewUrls.current.push(preview);
+        setImages((current) => [
+          ...current,
+          { id, file, filename: file.name, preview },
+        ]);
+        const image = document.createElement("img");
+        image.src = preview;
+        image.alt = "Imagen pegada en la solicitud";
+        image.dataset.inlineId = id;
+        image.contentEditable = "false";
+        marker.before(image, document.createElement("br"));
+      } catch (reason) {
+        setDetailError(
+          reason instanceof Error
+            ? reason.message
+            : "No se pudo procesar una imagen pegada.",
+        );
+      } finally {
+        setProcessing((current) => Math.max(0, current - 1));
+      }
+    }
+    marker.remove();
+    detailEditor.current.focus();
+  };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const editor = detailEditor.current;
+    if (!editor) return;
+    if (processing) {
+      setDetailError("Espera un momento mientras se preparan las imÃ¡genes.");
+      return;
+    }
+    const usedIds = new Set(
+      Array.from(
+        editor.querySelectorAll<HTMLImageElement>("img[data-inline-id]"),
+      ).map((image) => image.dataset.inlineId),
+    );
+    const usedImages = images.filter((image) => usedIds.has(image.id));
+    if (!editor.innerText.trim() && !usedImages.length) {
+      setDetailError("Escribe el detalle de la solicitud o pega una imagen.");
+      return;
+    }
+    if (detailInput.current)
+      detailInput.current.value = requestHtml(editor, usedImages);
     const form = event.currentTarget;
     setSending(true);
     setUploadProgress(file ? 0 : null);
@@ -310,19 +383,31 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
       study: studyNotRequired ? "" : study,
       business,
       request_type: requestType,
-      detail: String(data.get("detail")),
+      detail: requestHtml(editor, usedImages),
       status: "Pendiente",
       assignee: "",
       attachment_name: file?.name,
     };
     try {
-      onCreated(await createTicket(ticket, file, setUploadProgress));
+      onCreated(
+        await createTicket(
+          ticket,
+          file,
+          usedImages.map((image) => image.file),
+          setUploadProgress,
+        ),
+      );
       form.reset();
       setRequestType("");
       setBusiness("");
       setCountry("");
       setStudy("");
       setFile(null);
+      setImages([]);
+      if (detailEditor.current) detailEditor.current.innerHTML = "";
+      previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      previewUrls.current = [];
+      setDetailError("");
     } catch (error) {
       alert(
         error instanceof Error
@@ -472,13 +557,39 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
           </label>
           <label className="wide">
             Detalle de la solicitud*
+            <div
+              ref={detailEditor}
+              className="request-editor"
+              contentEditable={!sending}
+              role="textbox"
+              aria-multiline="true"
+              aria-label="Detalle de la solicitud"
+              data-placeholder="Incluye el objetivo, alcance, período requerido y cualquier contexto que ayude al equipo. También puedes pegar imágenes."
+              onPaste={pasteDetail}
+              onInput={() => setDetailError("")}
+            />
+            <small className="request-editor-note">
+              Puedes pegar imágenes directamente en el detalle. Quedarán disponibles para el equipo al abrir la solicitud.
+            </small>
             <textarea
+              ref={detailInput}
+              className="detail-value"
               name="detail"
-              required
+              required={false}
               placeholder="Incluye el objetivo, alcance, período requerido y cualquier contexto que ayude al equipo."
             />
           </label>
         </div>
+        {processing > 0 && (
+          <p className="processing-images">
+            Preparando {processing} imagen(es)…
+          </p>
+        )}
+        {detailError && (
+          <p className="request-detail-error" role="alert">
+            {detailError}
+          </p>
+        )}
         {sending && file && uploadProgress !== null && (
           <>
             <div
@@ -558,6 +669,7 @@ function Dash({
   const [filter, setFilter] = useState<"Todos" | Status>("Todos");
   const [month, setMonth] = useState("Todos");
   const [closing, setClosing] = useState<Ticket | null>(null);
+  const [viewingRequest, setViewingRequest] = useState<Ticket | null>(null);
   const months = useMemo(
     () =>
       [...new Set(tickets.map((ticket) => monthKey(ticket.created_at)))]
@@ -850,7 +962,13 @@ function Dash({
                     {[ticket.study, ticket.country].filter(Boolean).join(" · ")}
                   </b>
                 </div>
-                <p>{ticket.detail}</p>
+                <button
+                  className="view-request"
+                  type="button"
+                  onClick={() => setViewingRequest(ticket)}
+                >
+                  Ver solicitud <span>↗</span>
+                </button>
                 {ticket.resolution && (
                   <details className="resolution-summary">
                     <summary>Ver solución enviada</summary>
@@ -933,8 +1051,150 @@ function Dash({
           }}
         />
       )}
+      {viewingRequest && (
+        <RequestDetailModal
+          ticket={viewingRequest}
+          onClose={() => setViewingRequest(null)}
+          download={download}
+        />
+      )}
     </>
   );
+}
+
+function RequestDetailModal({
+  ticket,
+  onClose,
+  download,
+}: {
+  ticket: Ticket;
+  onClose: () => void;
+  download: (ticket: Ticket) => Promise<void>;
+}) {
+  const [images, setImages] = useState<Map<string, string>>(new Map());
+  const [loadingImages, setLoadingImages] = useState(false);
+  const [imageError, setImageError] = useState("");
+  useEffect(() => {
+    let active = true;
+    const urls: string[] = [];
+    const load = async () => {
+      if (!inlineImageCount(ticket.detail)) return;
+      setLoadingImages(true);
+      try {
+        const loaded = await loadRequestInlineImages(ticket);
+        if (!active) {
+          loaded.forEach((url) => URL.revokeObjectURL(url));
+          return;
+        }
+        loaded.forEach((url) => urls.push(url));
+        setImages(loaded);
+      } catch {
+        if (active)
+          setImageError("No se pudieron cargar algunas imágenes de la solicitud.");
+      } finally {
+        if (active) setLoadingImages(false);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [ticket]);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [onClose]);
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="resolution-modal request-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="request-detail-title"
+      >
+        <button
+          className="modal-close"
+          type="button"
+          aria-label="Cerrar"
+          onClick={onClose}
+        >
+          ×
+        </button>
+        <div className="modal-kicker">Solicitud {ticket.id}</div>
+        <h2 id="request-detail-title">Detalle completo</h2>
+        <div className="request-detail-meta">
+          <span>{ticket.request_type}</span>
+          {ticket.business && <span>{ticket.business}</span>}
+          <span>{[ticket.study, ticket.country].filter(Boolean).join(" · ")}</span>
+        </div>
+        <p className="modal-copy">
+          Enviada por <b>{ticket.requester_name}</b> · {ticket.requester_email}
+          <br />
+          {fmt(ticket.created_at)}
+        </p>
+        <div className="request-detail-content">
+          <RichTicketDetail detail={ticket.detail} images={images} />
+        </div>
+        {loadingImages && <p className="processing-images">Cargando imágenes…</p>}
+        {imageError && <p className="request-detail-error">{imageError}</p>}
+        {ticket.attachment_name && (
+          <div className="request-detail-download">
+            <b>Insumo adjunto</b>
+            <AttachmentDownload ticket={ticket} download={download} />
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function RichTicketDetail({
+  detail,
+  images,
+}: {
+  detail: string;
+  images: Map<string, string>;
+}) {
+  const documentValue = useMemo(
+    () => new DOMParser().parseFromString(detail, "text/html"),
+    [detail],
+  );
+  let key = 0;
+  const renderNode = (node: Node): ReactNode => {
+    const nodeKey = key++;
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (!(node instanceof HTMLElement)) return null;
+    if (node.tagName === "BR") return <br key={nodeKey} />;
+    if (node.tagName === "IMG") {
+      const source = node.getAttribute("src") || "";
+      const match = source.match(/^inline:\/\/(.+)$/i);
+      const name = match ? decodeURIComponent(match[1]) : "";
+      const url = name ? images.get(name) : "";
+      return url ? (
+        <img key={nodeKey} src={url} alt="Imagen incluida en la solicitud" />
+      ) : (
+        <span key={nodeKey} className="missing-inline-image">
+          Imagen incluida en la solicitud
+        </span>
+      );
+    }
+    const content = Array.from(node.childNodes).map(renderNode);
+    return node.tagName === "DIV" || node.tagName === "P" ? (
+      <div key={nodeKey}>{content}</div>
+    ) : (
+      <>{content}</>
+    );
+  };
+  return <>{Array.from(documentValue.body.childNodes).map(renderNode)}</>;
 }
 
 function AttachmentDownload({
@@ -1099,6 +1359,13 @@ function solutionHtml(editor: HTMLElement, images: InlineImage[]) {
   };
   const content = Array.from(editor.childNodes).map(serialize).join("");
   return `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;color:#172b3a;">${content}</div>`;
+}
+
+function requestHtml(editor: HTMLElement, images: InlineImage[]) {
+  return solutionHtml(editor, images).replace(
+    /Imagen incluida en la solución/g,
+    "Imagen incluida en la solicitud",
+  );
 }
 
 function ResolutionModal({
