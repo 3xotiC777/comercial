@@ -105,6 +105,7 @@ const catalog: Record<string, string[]> = {
   URUGUAY: ["P&G"],
   VENEZUELA: ["COCA COLA (KO TRD)"],
 };
+const customerStudies = ["Walmart", "Bimbo", "Nestlé", "Otros"];
 const Logo = () => (
   <img
     className="logo"
@@ -298,7 +299,10 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
   const detailEditor = useRef<HTMLDivElement>(null);
   const detailInput = useRef<HTMLTextAreaElement>(null);
   const previewUrls = useRef<string[]>([]);
-  const studies = useMemo(() => catalog[country] || [], [country]);
+  const studies = useMemo(
+    () => (business === "Customer" ? customerStudies : catalog[country] || []),
+    [business, country],
+  );
   const studyNotRequired =
     requestType === "Cotizaciones" || requestType === "Otros";
   useEffect(() => {
@@ -478,7 +482,10 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
             Negocio*
             <select
               value={business}
-              onChange={(event) => setBusiness(event.target.value)}
+              onChange={(event) => {
+                setBusiness(event.target.value);
+                setStudy("");
+              }}
               required
             >
               <option value="">Selecciona el negocio</option>
@@ -525,7 +532,11 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
             <select
               value={study}
               onChange={(event) => setStudy(event.target.value)}
-              disabled={!requestType || studyNotRequired || !country}
+              disabled={
+                !requestType ||
+                studyNotRequired ||
+                (business !== "Customer" && !country)
+              }
               required={!studyNotRequired}
             >
               <option value="">
@@ -533,7 +544,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
                   ? "No aplica para este tipo de solicitud"
                   : !requestType
                     ? "Primero elige el tipo de solicitud"
-                    : country
+                    : business === "Customer" || country
                       ? "Selecciona un estudio"
                       : "Primero elige un país"}
               </option>
