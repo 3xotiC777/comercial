@@ -47,3 +47,24 @@ En pruebas, Diego, Miguel y Rony se asignan en la interfaz. Antes de producción
 ## Permisos recomendados de SharePoint
 
 Para que el área comercial no vea solicitudes ajenas, en la configuración avanzada de la lista limita la lectura y edición a los elementos creados por cada usuario. Concede al grupo interno de Planeación permiso de edición sobre todos los elementos.
+
+## Mis tickets
+
+La pestaña **Mis tickets** tiene un botón **Iniciar sesión con Microsoft** y obtiene
+automáticamente el correo de esa cuenta (o su nombre de usuario si no tiene correo).
+Consulta SharePoint por ese correo, recorre todas las páginas del historial y muestra
+el estado actual, el analista, la fecha de creación y la solución escrita para los
+tickets finalizados. Incluye filtros de estado y un botón para actualizar los datos.
+El acceso a los elementos sigue sujeto a los permisos de SharePoint descritos arriba;
+el filtro de la interfaz no sustituye esos permisos.
+
+La fecha de solución proviene de **Fecha finalización**. Si falta, o el ticket sigue
+abierto, se muestra **Última actualización**, tomada de la fecha de modificación de
+SharePoint (puede incluir cambios de responsable o de otros campos). Las soluciones
+se muestran como texto seguro, conservando saltos de línea; las imágenes se indican
+con un marcador y los nombres de los archivos se muestran como referencia.
+
+Para consultas estables en listas grandes, crea un índice en la columna de correo
+del solicitante en la configuración de columnas indexadas de SharePoint.
+
+Pruebas de la consulta: `node --test tests/my-tickets.test.mjs`.

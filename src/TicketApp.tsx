@@ -14,6 +14,7 @@ import {
 import type { Analyst, Status, Ticket } from "./sharepoint";
 import "./App.css";
 import "./Resolution.css";
+import MyTickets from "./MyTickets";
 
 const analysts = ["Diego Montoya", "Miguel Cabezas", "Rony Rodriguez"] as const;
 const adminEmails = [
@@ -24,7 +25,7 @@ const adminEmails = [
 ];
 const catalog: Record<string, string[]> = {
   BOLIVIA: ["P&G"],
-  CHILE: ["COCA COLA (KO TRD)"],
+  CHILE: ["COCA COLA (KO TRD)", "CANASTA", "PLANIFICACION", "AUDITORES"],
   COLOMBIA: [
     "NESTLE (DSD)",
     "NESTLE (ISD)",
@@ -140,7 +141,7 @@ const durationLabel = (hours: number | null) =>
 const appVersion = import.meta.env.VITE_APP_VERSION || "local";
 
 export default function TicketApp() {
-  const [view, setView] = useState<"new" | "admin">("new"),
+  const [view, setView] = useState<"new" | "mine" | "admin">("new"),
     [tickets, setTickets] = useState<Ticket[]>([]),
     [user, setUser] = useState<{ name: string; email: string } | null>(null),
     [notice, setNotice] = useState(""),
@@ -243,6 +244,12 @@ export default function TicketApp() {
             Nueva solicitud
           </button>
           <button
+            className={view === "mine" ? "active" : ""}
+            onClick={() => setView("mine")}
+          >
+            Mis tickets
+          </button>
+          <button
             className={view === "admin" ? "active" : ""}
             onClick={() => setView("admin")}
           >
@@ -263,6 +270,12 @@ export default function TicketApp() {
             setTickets([ticket, ...tickets]);
           }}
         />
+      ) : view === "mine" ? (
+        <MyTickets onSignOut={async () => {
+          await signOut();
+          setUser(null);
+          setTickets([]);
+        }} />
       ) : user ? (
         <Dash
           tickets={tickets}

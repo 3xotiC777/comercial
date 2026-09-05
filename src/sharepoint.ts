@@ -10,6 +10,7 @@ export type Ticket = {
   id: string;
   spId: string;
   created_at: string;
+  updated_at?: string;
   requester_name: string;
   requester_email: string;
   country: string;
@@ -319,18 +320,52 @@ async function discoverAttachmentNames(
 export async function loadTickets(): Promise<Ticket[]> {
   const accessToken = await token(true);
   if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");
-  const c = await getContext(accessToken),
-    items = await graph(
-      `/sites/${c.siteId}/lists/${c.listId}/items?$expand=fields&$top=999`,
-      accessToken,
+  return loadTicketItems(accessToken);
+}
+
+export async function loadMyTickets(): Promise<{ email: string; tickets: Ticket[] }> {
+  const accessToken = await token(true);
+  if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");
+  const profile = await graph(
+    "/me?$select=mail,userPrincipalName",
+    accessToken,
+  );
+  const email = String(profile.mail || profile.userPrincipalName || "").trim().toLowerCase();
+  if (!email)
+    throw new Error(
+      "Microsoft no devolvió un correo para esta cuenta. Intenta iniciar sesión con tu cuenta corporativa.",
     );
-  const tickets: Ticket[] = items.value
+  return { email, tickets: await loadTicketItems(accessToken, email) };
+}
+
+async function loadTicketItems(accessToken: string, email?: string): Promise<Ticket[]> {
+  const c = await getContext(accessToken);
+  let path = `/sites/${c.siteId}/lists/${c.listId}/items?$expand=fields&$top=999`;
+  if (email) {
+    const emailField = field(c.columns, "email");
+    if (!emailField) throw new Error("No encontré la columna de correo del solicitante en SharePoint.");
+    path += `&$filter=${encodeURIComponent(`fields/${emailField} eq '${email.replace(/'/g, "''")}'`)}`;
+  }
+  type ListItem = {
+    id: string;
+    createdDateTime: string;
+    lastModifiedDateTime?: string;
+    fields: Record<string, unknown>;
+  };
+  const items: ListItem[] = [];
+  while (path) {
+    const page = await graph(path, accessToken, email ? {
+      headers: { Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly" },
+    } : {});
+    items.push(...page.value);
+    const next: string | undefined = page["@odata.nextLink"];
+    if (next && !next.startsWith("https://graph.microsoft.com/v1.0/"))
+      throw new Error("SharePoint devolvió una página de resultados no válida.");
+    path = next ? next.slice("https://graph.microsoft.com/v1.0".length) : "";
+  }
+  const tickets: Ticket[] = items
     .map(
-      (item: {
-        id: string;
-        createdDateTime: string;
-        fields: Record<string, unknown>;
-      }) => {
+      (item) => {
         const resolutionFiles = value(
           item.fields,
           c.columns,
@@ -340,6 +375,7 @@ export async function loadTickets(): Promise<Ticket[]> {
           id: value(item.fields, c.columns, "ticket") || `DN-${item.id}`,
           spId: item.id,
           created_at: item.createdDateTime,
+          updated_at: item.lastModifiedDateTime || String(item.fields.Modified || "") || undefined,
           requester_name: value(item.fields, c.columns, "name"),
           requester_email: value(item.fields, c.columns, "email"),
           country: value(item.fields, c.columns, "country"),
@@ -361,7 +397,9 @@ export async function loadTickets(): Promise<Ticket[]> {
         };
       },
     )
+    .filter((ticket) => !email || ticket.requester_email.trim().toLowerCase() === email)
     .sort((a: Ticket, b: Ticket) => b.created_at.localeCompare(a.created_at));
+  if (email) return tickets;
   const discovered = await discoverAttachmentNames(accessToken, c, tickets);
   return tickets.map((ticket) =>
     ticket.attachment_name
