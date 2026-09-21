@@ -305,6 +305,26 @@ textarea {
   background: #edf7fb;
   color: #0c5795;
 }
+.request-selected-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+.request-selected-files > span {
+  padding: 6px 9px;
+  border: 1px solid #d7e5e9;
+  border-radius: 3px;
+  background: #f4f9fa;
+  color: #315c73;
+  font-size: 10px;
+  font-weight: 700;
+}
+.request-selected-files small {
+  margin-left: 5px;
+  color: #83949c;
+  font-weight: 500;
+}
 .primary {
   background: #0b4e85;
   color: #fff;

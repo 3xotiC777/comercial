@@ -270,8 +270,9 @@ async function discoverAttachmentNames(
       name: string;
       children?: Array<{ name: string; file?: unknown }>;
     }>) {
-      const file = folder.children?.find((child) => child.file);
-      if (file) found.set(folder.name, file.name);
+      const files = folder.children?.filter((child) => child.file) || [];
+      if (files.length)
+        found.set(folder.name, files.map((file) => file.name).join("; "));
     }
   } catch {}
   const unresolved = tickets
@@ -310,8 +311,9 @@ async function discoverAttachmentNames(
     }>) {
       if (response.status !== 200) continue;
       const ticket = batch.chunk[Number(response.id)],
-        file = response.body?.value?.find((item) => item.file);
-      if (ticket && file) found.set(ticket.id, file.name);
+        files = response.body?.value?.filter((item) => item.file) || [];
+      if (ticket && files.length)
+        found.set(ticket.id, files.map((file) => file.name).join("; "));
     }
   }
   return found;
@@ -504,20 +506,23 @@ async function uploadRequestFile(
 
 export async function createTicket(
   ticket: Ticket,
-  file: File | null,
+  files: File[],
   inlineFiles: File[] = [],
   onProgress?: UploadProgress,
 ) {
   const accessToken = await token(true);
   if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");
   const c = await getContext(accessToken);
-  if (file)
+  for (const [index, file] of files.entries())
     await uploadRequestFile(
       accessToken,
       c.driveId,
       ticket.id,
       file,
-      onProgress,
+      (percent) =>
+        onProgress?.(
+          Math.round(((index + percent / 100) / files.length) * 100),
+        ),
     );
   if (inlineFiles.length) {
     await ensureFolder(accessToken, c.driveId, "", ticket.id);
@@ -542,7 +547,13 @@ export async function createTicket(
   set(fields, c.columns, "type", ticket.request_type);
   set(fields, c.columns, "detail", ticket.detail);
   set(fields, c.columns, "status", ticket.status);
-  if (file) set(fields, c.columns, "attachment", file.name);
+  if (files.length)
+    set(
+      fields,
+      c.columns,
+      "attachment",
+      files.map((file) => file.name).join("; "),
+    );
   const item = await graph(
     `/sites/${c.siteId}/lists/${c.listId}/items`,
     accessToken,

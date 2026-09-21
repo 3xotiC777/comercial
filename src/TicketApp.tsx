@@ -138,6 +138,11 @@ const durationLabel = (hours: number | null) =>
     : hours < 24
       ? `${Math.max(1, Math.round(hours))} h`
       : `${(hours / 24).toFixed(1)} d`;
+const requestAttachmentNames = (ticket: Ticket) =>
+  (ticket.attachment_name || "")
+    .split("; ")
+    .map((name) => name.trim())
+    .filter(Boolean);
 const appVersion = import.meta.env.VITE_APP_VERSION || "local";
 
 export default function TicketApp() {
@@ -303,7 +308,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
     [business, setBusiness] = useState(""),
     [country, setCountry] = useState(""),
     [study, setStudy] = useState(""),
-    [file, setFile] = useState<File | null>(null),
+    [files, setFiles] = useState<File[]>([]),
     [sending, setSending] = useState(false),
     [uploadProgress, setUploadProgress] = useState<number | null>(null),
     [images, setImages] = useState<InlineImage[]>([]),
@@ -388,7 +393,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
       detailInput.current.value = requestHtml(editor, usedImages);
     const form = event.currentTarget;
     setSending(true);
-    setUploadProgress(file ? 0 : null);
+    setUploadProgress(files.length ? 0 : null);
     const data = new FormData(form);
     const ticket: Ticket = {
       id: `DN-${Date.now().toString().slice(-6)}`,
@@ -403,13 +408,15 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
       detail: requestHtml(editor, usedImages),
       status: "Pendiente",
       assignee: "",
-      attachment_name: file?.name,
+      attachment_name: files.length
+        ? files.map((file) => file.name).join("; ")
+        : undefined,
     };
     try {
       onCreated(
         await createTicket(
           ticket,
-          file,
+          files,
           usedImages.map((image) => image.file),
           setUploadProgress,
         ),
@@ -419,7 +426,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
       setBusiness("");
       setCountry("");
       setStudy("");
-      setFile(null);
+      setFiles([]);
       setImages([]);
       if (detailEditor.current) detailEditor.current.innerHTML = "";
       previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
@@ -437,7 +444,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
     }
   };
   const buttonLabel = sending
-    ? file && uploadProgress !== null
+    ? files.length && uploadProgress !== null
       ? `Subiendo archivo · ${uploadProgress}%`
       : "Guardando..."
     : "Enviar solicitud";
@@ -567,16 +574,23 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
             </select>
           </label>
           <label className="file">
-            Insumo o archivo
+            Insumos o archivos
             <input
               type="file"
+              multiple
               disabled={sending}
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
+              onChange={(event) =>
+                setFiles(Array.from(event.target.files || []))
+              }
             />
             <span>
-              {file
-                ? `${file.name} · ${sizeLabel(file.size)}`
-                : "Subir archivo · Excel, PDF, imagen..."}
+              {files.length
+                ? files.length === 1
+                  ? `${files[0].name} · ${sizeLabel(files[0].size)}`
+                  : `${files.length} archivos seleccionados · ${sizeLabel(
+                      files.reduce((total, file) => total + file.size, 0),
+                    )}`
+                : "Subir uno o varios archivos · Excel, PDF, imagen..."}
             </span>
           </label>
           <label className="wide">
@@ -604,6 +618,15 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
             />
           </label>
         </div>
+        {files.length > 1 && (
+          <div className="request-selected-files" aria-label="Archivos seleccionados">
+            {files.map((file) => (
+              <span key={`${file.name}-${file.lastModified}`}>
+                {file.name} <small>{sizeLabel(file.size)}</small>
+              </span>
+            ))}
+          </div>
+        )}
         {processing > 0 && (
           <p className="processing-images">
             Preparando {processing} imagen(es)…
@@ -614,7 +637,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
             {detailError}
           </p>
         )}
-        {sending && file && uploadProgress !== null && (
+        {sending && files.length > 0 && uploadProgress !== null && (
           <>
             <div
               className="request-upload-progress"
@@ -1019,9 +1042,14 @@ function Dash({
                       : ""}
                   </small>
                 )}
-                {ticket.attachment_name && (
-                  <AttachmentDownload ticket={ticket} download={download} />
-                )}
+                {requestAttachmentNames(ticket).map((filename) => (
+                  <AttachmentDownload
+                    key={filename}
+                    ticket={ticket}
+                    filename={filename}
+                    download={download}
+                  />
+                ))}
               </div>
               <label className="select">
                 <small>Estado</small>
@@ -1170,10 +1198,17 @@ function RequestDetailModal({
         </div>
         {loadingImages && <p className="processing-images">Cargando imágenes…</p>}
         {imageError && <p className="request-detail-error">{imageError}</p>}
-        {ticket.attachment_name && (
+        {requestAttachmentNames(ticket).length > 0 && (
           <div className="request-detail-download">
-            <b>Insumo adjunto</b>
-            <AttachmentDownload ticket={ticket} download={download} />
+            <b>Insumos adjuntos</b>
+            {requestAttachmentNames(ticket).map((filename) => (
+              <AttachmentDownload
+                key={filename}
+                ticket={ticket}
+                filename={filename}
+                download={download}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -1223,29 +1258,30 @@ function RichTicketDetail({
 
 function AttachmentDownload({
   ticket,
+  filename,
   download,
 }: {
   ticket: Ticket;
+  filename: string;
   download: (ticket: Ticket) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false),
     extension =
-      ticket.attachment_name?.split(".").pop()?.toUpperCase().slice(0, 4) ||
-      "FILE";
+      filename.split(".").pop()?.toUpperCase().slice(0, 4) || "FILE";
   return (
     <button
       className="request-attachment"
       type="button"
       disabled={busy}
-      title={`Descargar ${ticket.attachment_name}`}
+      title={`Descargar ${filename}`}
       onClick={async () => {
         setBusy(true);
-        await download(ticket);
+        await download({ ...ticket, attachment_name: filename });
         setBusy(false);
       }}
     >
       <span>{extension}</span>
-      <b>{busy ? "Descargando…" : ticket.attachment_name}</b>
+      <b>{busy ? "Descargando…" : filename}</b>
       <i>↓</i>
     </button>
   );
