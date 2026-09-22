@@ -1,4 +1,5 @@
 import { PublicClientApplication } from "@azure/msal-browser";
+import { normalizeCc } from "./recipients";
 
 export type Status = "Pendiente" | "En proceso" | "Finalizado";
 export type Analyst =
@@ -13,6 +14,7 @@ export type Ticket = {
   updated_at?: string;
   requester_name: string;
   requester_email: string;
+  cc_emails?: string;
   country: string;
   study: string;
   business: string;
@@ -59,6 +61,7 @@ const aliases: Record<string, string[]> = {
   ],
   name: ["Solicitante", "Nombre solicitante", "Nombre completo", "Nombre"],
   email: ["Correo", "Correo solicitante", "Correo corporativo", "Email"],
+  cc: ["CC", "Con copia", "Correos en copia"],
   country: ["Pais", "País"],
   study: ["Estudio"],
   business: ["Negocio", "Business"],
@@ -380,6 +383,7 @@ async function loadTicketItems(accessToken: string, email?: string): Promise<Tic
           updated_at: item.lastModifiedDateTime || String(item.fields.Modified || "") || undefined,
           requester_name: value(item.fields, c.columns, "name"),
           requester_email: value(item.fields, c.columns, "email"),
+          cc_emails: value(item.fields, c.columns, "cc"),
           country: value(item.fields, c.columns, "country"),
           study: value(item.fields, c.columns, "study"),
           business: value(item.fields, c.columns, "business"),
@@ -510,9 +514,12 @@ export async function createTicket(
   inlineFiles: File[] = [],
   onProgress?: UploadProgress,
 ) {
+  const cc = normalizeCc(ticket.cc_emails || "", ticket.requester_email);
   const accessToken = await token(true);
   if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");
   const c = await getContext(accessToken);
+  if (cc && !field(c.columns, "cc"))
+    throw new Error("Falta la columna CC en SharePoint. No se creó el ticket para evitar perder los destinatarios en copia.");
   for (const [index, file] of files.entries())
     await uploadRequestFile(
       accessToken,
@@ -541,6 +548,7 @@ export async function createTicket(
   set(fields, c.columns, "ticket", ticket.id);
   set(fields, c.columns, "name", ticket.requester_name);
   set(fields, c.columns, "email", ticket.requester_email);
+  set(fields, c.columns, "cc", cc);
   set(fields, c.columns, "country", ticket.country);
   set(fields, c.columns, "study", ticket.study);
   set(fields, c.columns, "business", ticket.business);
@@ -559,7 +567,7 @@ export async function createTicket(
     accessToken,
     { method: "POST", body: JSON.stringify({ fields }) },
   );
-  return { ...ticket, spId: item.id };
+  return { ...ticket, cc_emails: cc, spId: item.id };
 }
 
 async function uploadRequestInlineFile(
@@ -757,10 +765,15 @@ export async function finalizeTicket(
   resolution: string,
   files: File[],
   inlineFiles: File[],
+  ccEmails: string,
 ) {
+  const cc = normalizeCc(ccEmails, ticket.requester_email);
   const accessToken = await token(true);
   if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");
   const c = await getContext(accessToken);
+  const ccField = field(c.columns, "cc");
+  if ((cc || ticket.cc_emails) && !ccField)
+    throw new Error("Falta la columna CC en SharePoint. No se finalizó el ticket para evitar perder los destinatarios en copia.");
   const statusField = field(c.columns, "status"),
     resolutionField = field(c.columns, "resolution");
   if (!resolutionField)
@@ -794,7 +807,8 @@ export async function finalizeTicket(
   try {
     savedSolution = await graph(endpoint, accessToken, {
       method: "PATCH",
-      body: JSON.stringify({ [resolutionField]: resolution }),
+      // Persist recipients before changing status, which triggers the final email.
+      body: JSON.stringify({ [resolutionField]: resolution, ...(ccField ? { [ccField]: cc } : {}) }),
     });
   } catch (error) {
     throw new Error(
@@ -803,6 +817,8 @@ export async function finalizeTicket(
   }
   if (!String(savedSolution?.[resolutionField] ?? "").trim())
     throw new Error("SharePoint no confirmó el texto de la solución.");
+  if (ccField && normalizeCc(String(savedSolution?.[ccField] ?? ""), ticket.requester_email) !== cc)
+    throw new Error("SharePoint no confirmó los correos en CC. El ticket no se ha finalizado.");
 
   const completedAtField = field(c.columns, "completedAt");
   if (completedAtField) {
@@ -834,6 +850,7 @@ export async function finalizeTicket(
   return {
     status: "Finalizado" as Status,
     resolution,
+    cc_emails: cc,
     resolution_files: files.map((file) => file.name),
     completed_at: completedAt,
   };

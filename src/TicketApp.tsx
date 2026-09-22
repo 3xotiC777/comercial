@@ -15,6 +15,7 @@ import type { Analyst, Status, Ticket } from "./sharepoint";
 import "./App.css";
 import "./Resolution.css";
 import MyTickets from "./MyTickets";
+import { normalizeCc } from "./recipients";
 
 const analysts = ["Diego Montoya", "Miguel Cabezas", "Rony Rodriguez"] as const;
 const adminEmails = [
@@ -207,6 +208,7 @@ export default function TicketApp() {
     resolution: string,
     files: File[],
     inlineFiles: File[],
+    ccEmails: string,
   ) => {
     try {
       setLoading(true);
@@ -215,12 +217,13 @@ export default function TicketApp() {
         resolution,
         files,
         inlineFiles,
+        ccEmails,
       );
       setTickets((current) =>
         current.map((x) => (x.spId === ticket.spId ? { ...x, ...patch } : x)),
       );
       setNotice(
-        `Ticket ${ticket.id} finalizado. Power Automate procesará el correo para ${ticket.requester_email}.`,
+        `Ticket ${ticket.id} finalizado. Power Automate procesará el correo para ${ticket.requester_email}${patch.cc_emails ? `, con copia a ${patch.cc_emails}` : ""}.`,
       );
       return null;
     } catch (error) {
@@ -392,15 +395,23 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
     if (detailInput.current)
       detailInput.current.value = requestHtml(editor, usedImages);
     const form = event.currentTarget;
+    const data = new FormData(form);
+    let ccEmails: string;
+    try {
+      ccEmails = normalizeCc(String(data.get("cc") || ""), String(data.get("email") || ""));
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : "Revisa los correos en CC.");
+      return;
+    }
     setSending(true);
     setUploadProgress(files.length ? 0 : null);
-    const data = new FormData(form);
     const ticket: Ticket = {
       id: `DN-${Date.now().toString().slice(-6)}`,
       spId: "",
       created_at: new Date().toISOString(),
       requester_name: String(data.get("name")),
       requester_email: String(data.get("email")),
+      cc_emails: ccEmails,
       country,
       study: studyNotRequired ? "" : study,
       business,
@@ -497,6 +508,13 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
               required
               placeholder="nombre@dichter-neira.com"
             />
+          </label>
+          <label className="cc-field">
+            Con copia (CC) · opcional
+            <textarea name="cc" rows={2} maxLength={13000}
+              placeholder="persona@dichter-neira.com; otra@dichter-neira.com"
+              aria-describedby="request-cc-help" disabled={sending} />
+            <small id="request-cc-help">Separa los correos con ; o , (máximo 50). Recibirán las notificaciones y la solución con sus adjuntos. Revisa los destinatarios antes de enviar.</small>
           </label>
           <label>
             Negocio*
@@ -710,6 +728,7 @@ function Dash({
     resolution: string,
     files: File[],
     inlineFiles: File[],
+    ccEmails: string,
   ) => Promise<string | null>;
   signOut: () => void;
 }) {
@@ -1091,12 +1110,13 @@ function Dash({
         <ResolutionModal
           ticket={closing}
           onClose={() => setClosing(null)}
-          onComplete={async (resolution, files, inlineFiles) => {
+          onComplete={async (resolution, files, inlineFiles, ccEmails) => {
             const problem = await complete(
               closing,
               resolution,
               files,
               inlineFiles,
+              ccEmails,
             );
             if (!problem) setClosing(null);
             return problem;
@@ -1193,6 +1213,7 @@ function RequestDetailModal({
           <br />
           {fmt(ticket.created_at)}
         </p>
+        {ticket.cc_emails && <p className="modal-copy cc-addresses"><b>Con copia:</b> {ticket.cc_emails}</p>}
         <div className="request-detail-content">
           <RichTicketDetail detail={ticket.detail} images={images} />
         </div>
@@ -1439,11 +1460,13 @@ function ResolutionModal({
     resolution: string,
     files: File[],
     inlineFiles: File[],
+    ccEmails: string,
   ) => Promise<string | null>;
 }) {
   const editor = useRef<HTMLDivElement>(null),
     previewUrls = useRef<string[]>([]),
     [files, setFiles] = useState<File[]>([]),
+    [ccEmails, setCcEmails] = useState(ticket.cc_emails || ""),
     [images, setImages] = useState<InlineImage[]>([]),
     [error, setError] = useState(""),
     [sending, setSending] = useState(false),
@@ -1554,12 +1577,20 @@ function ResolutionModal({
       return;
     }
     const html = solutionHtml(target, usedImages);
+    let normalizedCc: string;
+    try {
+      normalizedCc = normalizeCc(ccEmails, ticket.requester_email);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Revisa los correos en CC.");
+      return;
+    }
     setSending(true);
     setError("");
     const problem = await onComplete(
       html,
       files,
       usedImages.map((image) => image.file),
+      normalizedCc,
     );
     if (problem) setError(problem);
     setSending(false);
@@ -1594,6 +1625,14 @@ function ResolutionModal({
           <b>{ticket.requester_email}</b> con las imágenes en la misma posición.
         </p>
         <form onSubmit={submit}>
+          <label className="cc-field">
+            Con copia (CC) · opcional
+            <textarea value={ccEmails} onChange={(event) => setCcEmails(event.target.value)}
+              rows={2} maxLength={13000} disabled={sending}
+              placeholder="persona@dichter-neira.com; otra@dichter-neira.com"
+              aria-describedby="solution-cc-help" />
+            <small id="solution-cc-help">Puedes mantener, agregar o quitar correos de la solicitud. Separa con ; o , (máximo 50). Estas personas recibirán la respuesta y todos sus adjuntos.</small>
+          </label>
           <div className="solution-label">
             <span>Solución para el solicitante*</span>
             <div
