@@ -12,6 +12,8 @@ export type Ticket = {
   spId: string;
   created_at: string;
   updated_at?: string;
+  started_at?: string;
+  assignee_original?: string;
   requester_name: string;
   requester_email: string;
   cc_emails?: string;
@@ -89,6 +91,7 @@ const aliases: Record<string, string[]> = {
     "Fecha cierre",
     "Fecha de cierre",
   ],
+  startedAt: ["Fecha inicio", "Fecha de inicio"],
 };
 const fallbackFields: Record<string, string> = {
   ticket: "Title",
@@ -343,7 +346,7 @@ export async function loadMyTickets(): Promise<{ email: string; tickets: Ticket[
   return { email, tickets: await loadTicketItems(accessToken, email) };
 }
 
-async function loadTicketItems(accessToken: string, email?: string): Promise<Ticket[]> {
+async function loadTicketItems(accessToken: string, email?: string, discoverFiles = true): Promise<Ticket[]> {
   const c = await getContext(accessToken);
   let path = `/sites/${c.siteId}/lists/${c.listId}/items?$expand=fields&$top=999`;
   if (email) {
@@ -381,6 +384,8 @@ async function loadTicketItems(accessToken: string, email?: string): Promise<Tic
           spId: item.id,
           created_at: item.createdDateTime,
           updated_at: item.lastModifiedDateTime || String(item.fields.Modified || "") || undefined,
+          started_at: value(item.fields, c.columns, "startedAt") || undefined,
+          assignee_original: value(item.fields, c.columns, "assignee") || undefined,
           requester_name: value(item.fields, c.columns, "name"),
           requester_email: value(item.fields, c.columns, "email"),
           cc_emails: value(item.fields, c.columns, "cc"),
@@ -405,13 +410,66 @@ async function loadTicketItems(accessToken: string, email?: string): Promise<Tic
     )
     .filter((ticket) => !email || ticket.requester_email.trim().toLowerCase() === email)
     .sort((a: Ticket, b: Ticket) => b.created_at.localeCompare(a.created_at));
-  if (email) return tickets;
+  if (email || !discoverFiles) return tickets;
   const discovered = await discoverAttachmentNames(accessToken, c, tickets);
   return tickets.map((ticket) =>
     ticket.attachment_name
       ? ticket
       : { ...ticket, attachment_name: discovered.get(ticket.id) },
   );
+}
+
+export type ExportTicket = Ticket & {
+  request_files: string[];
+  solution_files: string[];
+  request_images: string[];
+  solution_images: string[];
+};
+
+// Export every page, including file metadata not stored in list columns.
+// Never put temporary, pre-authorized download URLs in a CSV.
+export async function loadTicketsForExport(): Promise<ExportTicket[]> {
+  const accessToken = await token(true);
+  if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");
+  const c = await getContext(accessToken);
+  const tickets: ExportTicket[] = (await loadTicketItems(accessToken, undefined, false))
+    .map((ticket) => ({ ...ticket, request_files: [], solution_files: [], request_images: [], solution_images: [] }));
+  const folders = [
+    ["request_files", ""],
+    ["solution_files", "/Solucion/Adjuntos"],
+    ["request_images", "/Solicitud/Inline"],
+    ["solution_images", "/Solucion/Inline"],
+  ] as const;
+  const requests = tickets.flatMap((ticket) => folders.map(([key, suffix]) => ({
+    ticket, key,
+    url: `/drives/${c.driveId}/root:/${[ticket.id, ...suffix.split("/").filter(Boolean)].map(encodeURIComponent).join("/")}:/children?$select=name,file&$top=999`,
+  })));
+  type FilePage = { value: { name: string; file?: unknown }[]; "@odata.nextLink"?: string };
+  for (let offset = 0; offset < requests.length; offset += 20) {
+    const chunk = requests.slice(offset, offset + 20);
+    const batch = await graph("/$batch", accessToken, {
+      method: "POST",
+      body: JSON.stringify({ requests: chunk.map((request, i) => ({ id: String(i), method: "GET", url: request.url })) }),
+    }) as { responses: { id: string; status: number; body?: FilePage }[] };
+    for (let i = 0; i < chunk.length; i++) {
+      const request = chunk[i];
+      const response = batch.responses.find((item) => item.id === String(i));
+      if (response?.status === 404) continue; // Tickets without files have no folder.
+      if (response?.status !== 200 || !response.body?.value)
+        throw new Error(`No se pudieron consultar los archivos de ${request.ticket.id}. Intenta descargar el CSV nuevamente.`);
+      let page: FilePage = response.body;
+      while (true) {
+        request.ticket[request.key].push(...page.value.filter((item) => item.file).map((item) => item.name));
+        const next = page["@odata.nextLink"];
+        if (!next) break;
+        const prefix = "https://graph.microsoft.com/v1.0";
+        if (!next.startsWith(`${prefix}/`)) throw new Error("SharePoint devolvió una página de archivos no válida.");
+        page = await graph(next.slice(prefix.length), accessToken);
+      }
+      request.ticket[request.key].sort((a, b) => a.localeCompare(b, "es"));
+    }
+  }
+  return tickets;
 }
 
 type UploadProgress = (percent: number) => void;

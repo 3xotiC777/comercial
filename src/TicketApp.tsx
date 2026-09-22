@@ -6,6 +6,7 @@ import {
   finalizeTicket,
   loadRequestInlineImages,
   loadTickets,
+  loadTicketsForExport,
   normalizeAnalyst,
   signIn,
   signOut,
@@ -16,6 +17,7 @@ import "./App.css";
 import "./Resolution.css";
 import MyTickets from "./MyTickets";
 import { normalizeCc } from "./recipients";
+import { downloadTicketsCsv } from "./ticketCsv";
 
 const analysts = ["Diego Montoya", "Miguel Cabezas", "Rony Rodriguez"] as const;
 const adminEmails = [
@@ -734,6 +736,28 @@ function Dash({
 }) {
   const [filter, setFilter] = useState<"Todos" | Status>("Todos");
   const [month, setMonth] = useState("Todos");
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
+  const [exportError, setExportError] = useState("");
+  const exportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportMessage("");
+    setExportError("");
+    try {
+      const allTickets = await loadTicketsForExport();
+      if (!allTickets.length) {
+        setExportMessage("No hay tickets para exportar.");
+        return;
+      }
+      downloadTicketsCsv(allTickets);
+      setExportMessage(`CSV generado con ${allTickets.length} tickets del histórico completo. Fechas en hora de Bogotá; imágenes y adjuntos referenciados por nombre.`);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "No se pudo generar el CSV. Inténtalo nuevamente.");
+    } finally {
+      setExporting(false);
+    }
+  };
   const [closing, setClosing] = useState<Ticket | null>(null);
   const [viewingRequest, setViewingRequest] = useState<Ticket | null>(null);
   const months = useMemo(
@@ -842,6 +866,17 @@ function Dash({
             </button>
           </div>
         </div>
+        <div className="csv-export">
+          <div>
+            <strong>Exportar información de tickets</strong>
+            <p>Histórico completo, sin filtros de mes o estado. Incluye solicitud, respuesta, fechas y archivos referenciados.</p>
+          </div>
+          <button className="ghost" type="button" onClick={() => void exportCsv()} disabled={exporting} aria-busy={exporting}>
+            {exporting ? "Preparando CSV…" : "Descargar CSV completo"}
+          </button>
+        </div>
+        {exportMessage && <p className="csv-feedback" role="status">{exportMessage}</p>}
+        {exportError && <p className="csv-feedback csv-error" role="alert">{exportError}</p>}
         <div className="metrics management-metrics">
           <Metric
             label="Solicitudes totales"
