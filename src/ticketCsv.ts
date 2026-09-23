@@ -1,4 +1,5 @@
 import type { ExportTicket } from "./sharepoint";
+import { commitmentDay, deadlineState, priorityFor } from "./ticketManagement.ts";
 
 const dateFormat = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit",
@@ -51,6 +52,7 @@ export const csvHeaders = [
   "Negocio", "País", "Estudio", "Tipo de solicitud", "Detalle de la solicitud", "Respuesta final",
   "Tiempo hasta finalizar (horas calendario)", "Archivos de la solicitud", "Archivos de la solución",
   "Imágenes de la solicitud", "Imágenes de la solución", "Enlace al ticket", "Carpeta de archivos",
+  "Prioridad automática", "Fecha compromiso", "Cumplimiento",
 ];
 
 export function buildTicketsCsv(tickets: ExportTicket[], toText = htmlToCsvText): string {
@@ -65,6 +67,7 @@ export function buildTicketsCsv(tickets: ExportTicket[], toText = htmlToCsvText)
     ticket.request_images.join("; "), ticket.solution_images.join("; "),
     `${site}/Lists/Comercial%20planeacion/DispForm.aspx?ID=${encodeURIComponent(ticket.spId)}`,
     `${site}/Comercial%20planeacion%20proyecto/Forms/AllItems.aspx?id=${encodeURIComponent(`/sites/reportingdn/Comercial planeacion proyecto/${ticket.id}`)}`,
+    priorityFor(ticket.request_type), commitmentDay(ticket.due_date), deadlineState(ticket),
   ]);
   // UTF-8 BOM + Excel separator directive keep accents and columns on Spanish Windows.
   return "\uFEFFsep=;\r\n" + [csvHeaders, ...rows].map((row) => row.map(csvCell).join(";")).join("\r\n") + "\r\n";

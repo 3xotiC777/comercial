@@ -41,7 +41,7 @@ test('complete CSV has BOM, Excel separator, complete records, safe links and no
   assert.ok(csv.includes('"uno.xlsx; dos.html"'));
   assert.ok(csv.includes('"Solución"'));
   assert.ok(csv.includes('DispForm.aspx?ID=42'));
-  assert.equal(csvHeaders.length, 24);
+  assert.equal(csvHeaders.length, 27);
   assert.deepEqual(ticket, before);
   assert.equal(buildTicketsCsv([], (text) => text).split('\r\n').length, 3);
 });

@@ -2,7 +2,7 @@
 
 En el área interna, **Descargar CSV completo** consulta de nuevo todos los tickets y los nombres de sus archivos en SharePoint. No aplica los filtros de mes ni de estado del tablero. No modifica tickets ni dispara correos.
 
-Incluye 24 columnas: identificadores, creación, inicio, finalización, última actualización, estado, responsable, solicitante, correo, CC, negocio, país, estudio, tipo, detalle, respuesta, horas calendario hasta finalizar, nombres de archivos e imágenes de solicitud y solución y enlaces a SharePoint. Los enlaces requieren permisos corporativos; no contienen credenciales ni enlaces temporales de descarga.
+Incluye 27 columnas: identificadores, creación, inicio, finalización, última actualización, estado, responsable, solicitante, correo, CC, negocio, país, estudio, tipo, detalle, respuesta, horas calendario hasta finalizar, nombres de archivos e imágenes de solicitud y solución, enlaces a SharePoint, prioridad automática, fecha compromiso y cumplimiento. Los enlaces requieren permisos corporativos; no contienen credenciales ni enlaces temporales de descarga.
 
 Las fechas están en hora de Bogotá (UTC-05). Una fecha no registrada queda vacía. La última modificación no se usa como fecha de cierre. Las horas calendario transcurren desde la creación hasta el cierre y no equivalen a horas laboradas por el analista.
 

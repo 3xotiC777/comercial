@@ -18,6 +18,8 @@ import "./Resolution.css";
 import MyTickets from "./MyTickets";
 import { normalizeCc } from "./recipients";
 import { downloadTicketsCsv } from "./ticketCsv";
+import { TicketSearch, PriorityDeadline, TicketManagementDialog } from "./ManagementControls";
+import { dayInBogota, emptyFilters, filterTickets, priorityFor } from "./ticketManagement";
 
 const analysts = ["Diego Montoya", "Miguel Cabezas", "Rony Rodriguez"] as const;
 const adminEmails = [
@@ -176,19 +178,21 @@ export default function TicketApp() {
   const update = async (ticket: Ticket, patch: Partial<Ticket>) => {
     try {
       setLoading(true);
-      await updateTicket(ticket, patch);
+      const saved = await updateTicket(ticket, patch);
       setTickets((current) =>
-        current.map((x) => (x.spId === ticket.spId ? { ...x, ...patch } : x)),
+        current.map((x) => (x.spId === ticket.spId ? { ...x, ...saved } : x)),
       );
       setNotice(
-        "Cambio guardado. Power Automate notificará a las personas involucradas.",
+        "Cambio guardado en SharePoint.",
       );
+      return true;
     } catch (error) {
       setNotice(
         error instanceof Error
           ? error.message
           : "No se pudo guardar el cambio.",
       );
+      return false;
     } finally {
       setLoading(false);
     }
@@ -292,6 +296,10 @@ export default function TicketApp() {
           update={update}
           download={download}
           complete={complete}
+          refresh={async () => {
+            try { setTickets(await loadTickets()); setNotice("Tablero actualizado."); }
+            catch (error) { setNotice(error instanceof Error ? error.message : "No se pudo actualizar el tablero."); }
+          }}
           signOut={async () => {
             await signOut();
             setUser(null);
@@ -550,6 +558,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
                 <option key={item}>{item}</option>
               ))}
             </select>
+            {requestType && <small className="management-note" aria-live="polite">Prioridad automática: {priorityFor(requestType)}</small>}
           </label>
           <label>
             País*
@@ -720,10 +729,11 @@ function Dash({
   update,
   download,
   complete,
+  refresh,
   signOut,
 }: {
   tickets: Ticket[];
-  update: (ticket: Ticket, patch: Partial<Ticket>) => void;
+  update: (ticket: Ticket, patch: Partial<Ticket>) => Promise<boolean>;
   download: (ticket: Ticket) => Promise<void>;
   complete: (
     ticket: Ticket,
@@ -733,9 +743,18 @@ function Dash({
     ccEmails: string,
   ) => Promise<string | null>;
   signOut: () => void;
+  refresh: () => Promise<void>;
 }) {
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"Todos" | Status>("Todos");
   const [month, setMonth] = useState("Todos");
+  const [searchFilters, setSearchFilters] = useState({ ...emptyFilters });
+  const [management, setManagement] = useState<{ ticket: Ticket; tab: "planning" | "history" } | null>(null);
+  const [today, setToday] = useState(() => dayInBogota(new Date()));
+  useEffect(() => {
+    const timer = window.setInterval(() => setToday(dayInBogota(new Date())), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [exportError, setExportError] = useState("");
@@ -774,7 +793,7 @@ function Dash({
       ),
     [month, tickets],
   );
-  const shown = periodTickets.filter(
+  const shown = filterTickets(periodTickets, searchFilters, today).filter(
     (ticket) => filter === "Todos" || ticket.status === filter,
   );
   const completed = periodTickets.filter(
@@ -864,6 +883,10 @@ function Dash({
             <button className="ghost" onClick={signOut}>
               Cerrar sesión
             </button>
+            <button className="ghost" disabled={refreshing} onClick={async () => {
+              setRefreshing(true);
+              try { await refresh(); } finally { setRefreshing(false); }
+            }}>{refreshing ? "Actualizando…" : "Actualizar"}</button>
           </div>
         </div>
         <div className="csv-export">
@@ -1049,6 +1072,9 @@ function Dash({
               ))}
             </div>
           </div>
+          <TicketSearch tickets={tickets} filters={searchFilters} onChange={setSearchFilters}
+            clear={() => { setMonth("Todos"); setFilter("Todos"); }} count={shown.length} total={tickets.length} />
+          {!shown.length && <p className="tickets-empty">No hay solicitudes con estos filtros. Prueba otra búsqueda o selecciona «Limpiar filtros».</p>}
           {shown.map((ticket) => (
             <article className="ticket" key={ticket.spId}>
               <div className="id">
@@ -1056,6 +1082,7 @@ function Dash({
                 <span>{fmt(ticket.created_at)}</span>
               </div>
               <div className="info">
+                <PriorityDeadline ticket={ticket} today={today} />
                 <div>
                   <i>{ticket.request_type}</i>
                   {ticket.business && <i>{ticket.business}</i>}
@@ -1070,6 +1097,8 @@ function Dash({
                 >
                   Ver solicitud <span>↗</span>
                 </button>
+                <button className="view-request management-link" type="button" onClick={() => setManagement({ ticket, tab: "planning" })}>Fecha compromiso</button>
+                <button className="view-request management-link" type="button" onClick={() => setManagement({ ticket, tab: "history" })}>Historial</button>
                 {ticket.resolution && (
                   <details className="resolution-summary">
                     <summary>Ver solución enviada</summary>
@@ -1158,6 +1187,8 @@ function Dash({
           }}
         />
       )}
+      {management && <TicketManagementDialog ticket={management.ticket} initialTab={management.tab}
+        onClose={() => setManagement(null)} onSave={(patch) => update(management.ticket, patch)} />}
       {viewingRequest && (
         <RequestDetailModal
           ticket={viewingRequest}

@@ -1,5 +1,7 @@
 import { PublicClientApplication } from "@azure/msal-browser";
 import { normalizeCc } from "./recipients";
+import { commitmentDay, historyKeys, historyEvents, priorityFor, validDay } from "./ticketManagement";
+import type { HistoryVersion, Priority } from "./ticketManagement";
 
 export type Status = "Pendiente" | "En proceso" | "Finalizado";
 export type Analyst =
@@ -10,6 +12,9 @@ export type Analyst =
 export type Ticket = {
   id: string;
   spId: string;
+  etag?: string;
+  priority?: Priority | "";
+  due_date?: string;
   created_at: string;
   updated_at?: string;
   started_at?: string;
@@ -92,6 +97,8 @@ const aliases: Record<string, string[]> = {
     "Fecha de cierre",
   ],
   startedAt: ["Fecha inicio", "Fecha de inicio"],
+  priority: ["Prioridad"],
+  dueDate: ["Fecha compromiso", "Fecha de compromiso"],
 };
 const fallbackFields: Record<string, string> = {
   ticket: "Title",
@@ -154,6 +161,7 @@ async function graph(
     headers,
   });
   if (!response.ok) {
+    if (response.status === 412) throw new Error("Otra persona modificó este ticket. Actualiza el tablero antes de guardar nuevamente.");
     let detail = "";
     try {
       const body = await response.clone().json();
@@ -356,6 +364,7 @@ async function loadTicketItems(accessToken: string, email?: string, discoverFile
   }
   type ListItem = {
     id: string;
+    eTag?: string;
     createdDateTime: string;
     lastModifiedDateTime?: string;
     fields: Record<string, unknown>;
@@ -382,6 +391,9 @@ async function loadTicketItems(accessToken: string, email?: string, discoverFile
         return {
           id: value(item.fields, c.columns, "ticket") || `DN-${item.id}`,
           spId: item.id,
+          etag: item.eTag,
+          priority: priorityFor(value(item.fields, c.columns, "type")),
+          due_date: commitmentDay(value(item.fields, c.columns, "dueDate")),
           created_at: item.createdDateTime,
           updated_at: item.lastModifiedDateTime || String(item.fields.Modified || "") || undefined,
           started_at: value(item.fields, c.columns, "startedAt") || undefined,
@@ -737,10 +749,24 @@ export async function updateTicket(ticket: Ticket, patch: Partial<Ticket>) {
   if (patch.status && statusField) fields[statusField] = patch.status;
   if (patch.assignee !== undefined && assigneeField)
     fields[assigneeField] = patch.assignee;
+  if (patch.priority !== undefined) throw new Error("La prioridad es automática según el tipo de solicitud.");
+  if (patch.due_date !== undefined) {
+    const column = field(c.columns, "dueDate");
+    if (!column) throw new Error("Falta la columna Fecha compromiso en SharePoint.");
+    if (patch.due_date && !validDay(patch.due_date)) throw new Error("Selecciona una fecha compromiso válida.");
+    fields[column] = patch.due_date ? `${patch.due_date}T12:00:00Z` : null;
+  }
+  const current = await graph(`/sites/${c.siteId}/lists/${c.listId}/items/${ticket.spId}?$expand=fields`, accessToken);
+  if ((patch.status && value(current.fields, c.columns, "status") !== ticket.status) ||
+      (patch.assignee !== undefined && normalizeAnalyst(value(current.fields, c.columns, "assignee")) !== ticket.assignee) ||
+      (patch.due_date !== undefined && commitmentDay(value(current.fields, c.columns, "dueDate")) !== commitmentDay(ticket.due_date)))
+    throw new Error("Este dato cambió desde que abriste el ticket. Actualiza el tablero para no sobrescribir el cambio de otra persona.");
+  const etag = current.eTag || current["@odata.etag"];
+  if (!etag) throw new Error("No se pudo verificar la versión actual del ticket. Actualiza el tablero e inténtalo de nuevo.");
   const updated = await graph(
     `/sites/${c.siteId}/lists/${c.listId}/items/${ticket.spId}/fields`,
     accessToken,
-    { method: "PATCH", body: JSON.stringify(fields) },
+    { method: "PATCH", body: JSON.stringify(fields), headers: { "If-Match": etag } },
   );
   if (
     patch.status &&
@@ -754,6 +780,43 @@ export async function updateTicket(ticket: Ticket, patch: Partial<Ticket>) {
     String(updated?.[assigneeField] ?? "") !== patch.assignee
   )
     throw new Error("SharePoint no confirmó el cambio de responsable.");
+  if (patch.due_date !== undefined && commitmentDay(String(updated?.[field(c.columns, "dueDate")!] ?? "")) !== patch.due_date)
+    throw new Error("SharePoint no confirmó la fecha compromiso. Actualiza el tablero antes de reintentar.");
+  // The old ETag must not be reused after a successful update.
+  return { ...patch, etag: undefined, updated_at: new Date().toISOString() };
+}
+
+export async function loadTicketHistory(ticket: Ticket) {
+  const accessToken = await token(true);
+  if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");
+  const c = await getContext(accessToken);
+  const base = `/sites/${c.siteId}/lists/${c.listId}/items/${encodeURIComponent(ticket.spId)}/versions`;
+  const versions: { id: string }[] = [];
+  let path = base;
+  while (path) {
+    const page = await graph(path, accessToken);
+    versions.push(...page.value);
+    const next: string | undefined = page["@odata.nextLink"];
+    if (next && !next.startsWith("https://graph.microsoft.com/v1.0/")) throw new Error("SharePoint devolvió una página de historial no válida.");
+    path = next ? next.slice("https://graph.microsoft.com/v1.0".length) : "";
+  }
+  const details: HistoryVersion[] = [];
+  for (let offset = 0; offset < versions.length; offset += 20) {
+    const chunk = versions.slice(offset, offset + 20);
+    const batch = await graph("/$batch", accessToken, { method: "POST", body: JSON.stringify({
+      requests: chunk.map((version, i) => ({ id: String(i), method: "GET", url: `${base}/${encodeURIComponent(version.id)}?$expand=fields` })),
+    }) });
+    for (let i = 0; i < chunk.length; i++) {
+      const response = batch.responses.find((item: { id: string }) => item.id === String(i));
+      if (response?.status !== 200 || !response.body?.fields) throw new Error("No se pudo consultar el historial completo. Inténtalo nuevamente.");
+      const version = response.body;
+      details.push({ id: version.id, at: version.lastModifiedDateTime,
+        actor: version.lastModifiedBy?.user?.displayName || version.lastModifiedBy?.application?.displayName || "Autor no disponible",
+        fields: Object.fromEntries(historyKeys.map((key) => [key, key === "priority" ? priorityFor(value(version.fields, c.columns, "type")) : key === "dueDate" ? commitmentDay(value(version.fields, c.columns, key)) : value(version.fields, c.columns, key)])),
+      });
+    }
+  }
+  return historyEvents(details);
 }
 
 async function ensureFolder(

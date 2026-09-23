@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { loadMyTickets } from "./sharepoint";
 import type { Status, Ticket } from "./sharepoint";
 import "./MyTickets.css";
+import { commitmentDay, deadlineState, priorityFor } from "./ticketManagement";
 
 const statuses = ["Todos", "Pendiente", "En proceso", "Finalizado"] as const;
 const dateLabel = (value?: string) => {
@@ -118,6 +119,9 @@ export default function MyTickets({ onSignOut }: { onSignOut: () => Promise<void
                 <span className={`status ${ticket.status.replace(" ", "-").toLowerCase()}`}>{ticket.status}</span>
               </div>
               <dl className="my-ticket-facts">
+                <div><dt>Prioridad automática</dt><dd>{priorityFor(ticket.request_type) || "Sin regla"}</dd></div>
+                <div><dt>Fecha compromiso</dt><dd>{commitmentDay(ticket.due_date).split("-").reverse().join("/") || "Por definir"}</dd></div>
+                <div><dt>Cumplimiento</dt><dd>{deadlineState(ticket)}</dd></div>
                 <div><dt>Analista asignado</dt><dd>{ticket.assignee || "Sin asignar"}</dd></div>
                 <div><dt>Fecha de creación</dt><dd>{dateLabel(ticket.created_at)}</dd></div>
                 <div><dt>{ticket.status === "Finalizado" && ticket.completed_at ? "Fecha de solución" : "Última actualización"}</dt>

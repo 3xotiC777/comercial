@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import ts from "typescript";
+import * as management from "../src/ticketManagement.ts";
 
 const source = readFileSync(new URL("../src/sharepoint.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
@@ -45,7 +46,7 @@ function service({ profile = { mail: "persona@empresa.com" }, pages = [{ value: 
   };
   const exports = {};
   new Function("require", "exports", "window", "fetch", compiled)(
-    () => ({ PublicClientApplication: FakeMsal }), exports,
+    (name) => name === "./ticketManagement" ? management : ({ PublicClientApplication: FakeMsal }), exports,
     { location: { hostname: "localhost", origin: "http://localhost" } }, fetch,
   );
   return { api: exports, requests };
