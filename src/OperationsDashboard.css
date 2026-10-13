@@ -61,6 +61,9 @@
 .ops-flow-plot { width: 100%; padding: 0 0 0; }
 .ops-flow-plot svg { display: block; width: 100%; max-height: 245px; overflow: visible; }
 .ops-chart-label { font-family: "DM Mono", monospace; font-size: 9px; fill: #8696a8; }
+.ops-flow-value { font-family: "DM Mono", monospace; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; paint-order: stroke fill; pointer-events: none; }
+.ops-flow-value-received { fill: #285bd2; }
+.ops-flow-value-completed { fill: #087e73; }
 .ops-chart-note { color: #8492a2; margin: 17px 0 0; font-size: 9px; line-height: 1.75; }
 .ops-data-details { margin-top: 9px; }
 .ops-data-details > summary { display: inline-list-item; color: #6a809a; font-size: 9px; cursor: pointer; border-radius: 3px; }
@@ -209,6 +212,8 @@
   .ops-aging-panel .ops-panel-tag { display: none; }
 }
 @media (max-width: 520px) {
+  .ops-flow-value { font-size: 20px; }
+  .ops-flow-plot .ops-chart-label { font-size: 13px; }
   .ops-heading { flex-direction: column; margin-bottom: 18px; }
   .ops-heading h1 { font-size: 26px; }
   .ops-heading p { max-width: 300px; font-size: 12px; }

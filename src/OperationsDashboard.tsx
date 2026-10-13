@@ -60,6 +60,15 @@ function FlowChart({ data }: { data: TicketAnalytics["trend"] }) {
       {data.map((row, index) => <g key={row.key}><rect x={x(index) - 18} y={y(row.created)} width="36" height={177 - y(row.created)} rx="5" fill={`url(#${id}-bar)`}><title>{monthLabel(row.key)}: {row.created} recibidos</title></rect><text x={x(index)} y="205" textAnchor="middle" className="ops-chart-label">{row.label.replace(".", "")}</text></g>)}
       <polyline points={points} fill="none" stroke="#16a394" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
       {data.map((row, index) => <circle key={row.key} cx={x(index)} cy={y(row.completed)} r="4.5" fill="white" stroke="#16a394" strokeWidth="2.5"><title>{monthLabel(row.key)}: {row.completed} finalizados</title></circle>)}
+      {data.map((row, index) => {
+        const receivedY = y(row.created);
+        const completedY = y(row.completed);
+        const labelsAreClose = Math.abs(receivedY - completedY) < 26;
+        return <g key={row.key} aria-hidden="true">
+          <text x={x(index) - (labelsAreClose ? 8 : 0)} y={receivedY - 12} textAnchor={labelsAreClose ? "end" : "middle"} className="ops-flow-value ops-flow-value-received">{number.format(row.created)}</text>
+          <text x={x(index) + (labelsAreClose ? 8 : 0)} y={completedY - 12} textAnchor={labelsAreClose ? "start" : "middle"} className="ops-flow-value ops-flow-value-completed">{number.format(row.completed)}</text>
+        </g>;
+      })}
     </svg></div>
     <p className="ops-chart-note">Cada evento cuenta en su mes: creación o cierre válido de tickets actualmente finalizados. Incluye tickets creados antes del periodo.</p>
     <details className="ops-data-details"><summary>Ver valores del gráfico</summary><div className="ops-table-scroll"><table><caption>Volumen mensual · hora de Bogotá</caption><thead><tr><th>Mes</th><th>Recibidos</th><th>Finalizados</th></tr></thead><tbody>{data.map((row) => <tr key={row.key}><th scope="row">{monthLabel(row.key)}</th><td>{row.created}</td><td>{row.completed}</td></tr>)}</tbody></table></div></details>
