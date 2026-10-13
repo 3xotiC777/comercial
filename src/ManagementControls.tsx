@@ -33,7 +33,7 @@ export function TicketSearch({ tickets, filters, onChange, clear, count, total }
     {filters.from && filters.to && filters.from > filters.to && <p className="management-error" role="alert">La fecha desde no puede ser posterior a la fecha hasta.</p>}
     <div className="filter-summary"><p role="status">{count} de {total} solicitudes · filtros combinados con el periodo y estado seleccionados</p>
       <button className="ghost" type="button" onClick={() => { onChange({ ...emptyFilters }); clear(); }}>Limpiar filtros</button></div>
-    <small>Los filtros de esta sección no cambian los indicadores de arriba ni el CSV completo. Fechas en hora de Bogotá.</small>
+    <small>Los filtros solo afectan esta consulta. El dashboard y el CSV completo conservan su alcance. Fechas en hora de Bogotá.</small>
   </section>;
 }
 

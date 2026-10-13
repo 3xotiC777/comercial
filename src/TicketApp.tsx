@@ -16,6 +16,10 @@ import type { Analyst, Status, Ticket } from "./sharepoint";
 import "./App.css";
 import "./Resolution.css";
 import MyTickets from "./MyTickets";
+import Welcome from "./Welcome";
+import OperationsDashboard from "./OperationsDashboard";
+import PortalIcon from "./PortalIcon";
+import type { TicketFilters } from "./ticketManagement";
 import { normalizeCc } from "./recipients";
 import { downloadTicketsCsv } from "./ticketCsv";
 import { TicketSearch, PriorityDeadline, TicketManagementDialog } from "./ManagementControls";
@@ -124,7 +128,7 @@ const fmt = (date: string) =>
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(date));
-const monthKey = (date: string) => date.slice(0, 7);
+const monthKey = (date: string) => dayInBogota(date).slice(0, 7);
 const monthLabel = (month: string) =>
   new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric" }).format(
     new Date(`${month}-01T12:00:00`),
@@ -151,7 +155,7 @@ const requestAttachmentNames = (ticket: Ticket) =>
 const appVersion = import.meta.env.VITE_APP_VERSION || "local";
 
 export default function TicketApp() {
-  const [view, setView] = useState<"new" | "mine" | "admin">("new"),
+  const [view, setView] = useState<"home" | "new" | "mine" | "admin">("home"),
     [tickets, setTickets] = useState<Ticket[]>([]),
     [user, setUser] = useState<{ name: string; email: string } | null>(null),
     [notice, setNotice] = useState(""),
@@ -162,8 +166,9 @@ export default function TicketApp() {
       const person = await signIn();
       if (!adminEmails.includes(person.email.toLowerCase()))
         throw new Error("Tu cuenta no está autorizada para el panel interno.");
+      const loadedTickets = await loadTickets();
+      setTickets(loadedTickets);
       setUser(person);
-      setTickets(await loadTickets());
       setView("admin");
     } catch (error) {
       setNotice(
@@ -244,41 +249,49 @@ export default function TicketApp() {
     }
   };
   return (
-    <main>
+    <main className="portal-app">
       <header className="topbar">
-        <button className="brand" onClick={() => setView("new")}>
+        <button className="brand" onClick={() => setView("home")} aria-label="Ir al inicio">
           <Logo />
           <span>Centro de solicitudes</span>
         </button>
-        <nav>
+        <nav aria-label="Navegación principal">
+          <button className={view === "home" ? "active" : ""} aria-current={view === "home" ? "page" : undefined} onClick={() => setView("home")}><PortalIcon name="home" /> Inicio</button>
           <button
             className={view === "new" ? "active" : ""}
+            aria-current={view === "new" ? "page" : undefined}
             onClick={() => setView("new")}
           >
-            Nueva solicitud
+            <PortalIcon name="plus" /> Nueva solicitud
           </button>
           <button
             className={view === "mine" ? "active" : ""}
+            aria-current={view === "mine" ? "page" : undefined}
             onClick={() => setView("mine")}
           >
-            Mis tickets
+            <PortalIcon name="tickets" /> Mis tickets
           </button>
           <button
             className={view === "admin" ? "active" : ""}
+            aria-current={view === "admin" ? "page" : undefined}
             onClick={() => setView("admin")}
           >
-            Área interna ↗
+            <PortalIcon name="dashboard" /> Área interna
           </button>
         </nav>
       </header>
       {notice && (
         <div className="toast" role="status">
           {notice}
-          <button onClick={() => setNotice("")}>×</button>
+          <button aria-label="Cerrar notificación" onClick={() => setNotice("")}>×</button>
         </div>
       )}
-      {view === "new" ? (
+      {view === "home" ? (
+        <Welcome onNewRequest={() => setView("new")} onMyTickets={() => setView("mine")} />
+      ) : view === "new" ? (
         <Request
+          onHome={() => setView("home")}
+          onMyTickets={() => setView("mine")}
           onCreated={(ticket) => {
             setNotice(`Solicitud ${ticket.id} creada correctamente.`);
             setTickets([ticket, ...tickets]);
@@ -292,6 +305,7 @@ export default function TicketApp() {
         }} />
       ) : user ? (
         <Dash
+          userName={user.name}
           tickets={tickets}
           update={update}
           download={download}
@@ -316,7 +330,36 @@ export default function TicketApp() {
   );
 }
 
-function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
+function Request({ onCreated, onHome, onMyTickets }: { onCreated: (ticket: Ticket) => void; onHome: () => void; onMyTickets: () => void }) {
+  const [step, setStep] = useState(0);
+  const [createdId, setCreatedId] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const steps = ["Tus datos", "Tu solicitud", "Detalle y archivos"];
+  const moveTo = (next: number) => {
+    setStep(next);
+    requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>(`[data-form-step="${next}"] input, [data-form-step="${next}"] select, [data-form-step="${next}"] [contenteditable]`)?.focus());
+  };
+  const validateStep = (index: number) => {
+    const controls = formRef.current?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[data-form-step="${index}"] input, [data-form-step="${index}"] select, [data-form-step="${index}"] textarea`);
+    for (const control of controls || []) {
+      if (!control.checkValidity()) {
+        setStep(index);
+        requestAnimationFrame(() => control.reportValidity());
+        return false;
+      }
+    }
+    return true;
+  };
+  const nextStep = () => {
+    if (!validateStep(step)) return;
+    if (step === 0 && formRef.current) {
+      const data = new FormData(formRef.current);
+      try { normalizeCc(String(data.get("cc") || ""), String(data.get("email") || "")); }
+      catch (error) { setDetailError(error instanceof Error ? error.message : "Revisa los correos en CC."); return; }
+    }
+    setDetailError("");
+    moveTo(Math.min(2, step + 1));
+  };
   const [requestType, setRequestType] = useState(""),
     [business, setBusiness] = useState(""),
     [country, setCountry] = useState(""),
@@ -386,10 +429,13 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
   };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (sending) return;
+    if (step < 2) { nextStep(); return; }
+    for (let index = 0; index < 3; index++) if (!validateStep(index)) return;
     const editor = detailEditor.current;
     if (!editor) return;
     if (processing) {
-      setDetailError("Espera un momento mientras se preparan las imÃ¡genes.");
+      setDetailError("Espera un momento mientras se preparan las imágenes.");
       return;
     }
     const usedIds = new Set(
@@ -434,14 +480,14 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
         : undefined,
     };
     try {
-      onCreated(
-        await createTicket(
+      const savedTicket = await createTicket(
           ticket,
           files,
           usedImages.map((image) => image.file),
           setUploadProgress,
-        ),
-      );
+        );
+      onCreated(savedTicket);
+      setCreatedId(savedTicket.id);
       form.reset();
       setRequestType("");
       setBusiness("");
@@ -454,7 +500,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
       previewUrls.current = [];
       setDetailError("");
     } catch (error) {
-      alert(
+      setDetailError(
         error instanceof Error
           ? error.message
           : "No fue posible crear la solicitud.",
@@ -469,51 +515,45 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
       ? `Subiendo archivo · ${uploadProgress}%`
       : "Guardando..."
     : "Enviar solicitud";
+  if (createdId) return <section className="request-success fade" role="status">
+    <div className="success-emblem"><PortalIcon name="check" /></div>
+    <div className="eyebrow">SOLICITUD REGISTRADA</div>
+    <h1>Ya dimos el primer paso.</h1>
+    <p>Tu solicitud <strong>{createdId}</strong> quedó registrada. Podrás consultar su estado y la respuesta del equipo en Mis tickets.</p>
+    <button className="primary" onClick={onMyTickets}>Consultar mis tickets <PortalIcon name="arrow" /></button>
+    <button className="text-button" onClick={() => { setCreatedId(""); setStep(0); }}>Crear otra solicitud</button>
+  </section>;
   return (
-    <section className="request fade">
-      <div className="hero">
-        <div className="eyebrow">D&N · OPERACIONES</div>
-        <h1>
-          Hagamos que tu
-          <br />
-          <em>solicitud avance.</em>
-        </h1>
-        <p>
-          Centraliza tus requerimientos, adjunta tus insumos y recibe
-          seguimiento claro en cada etapa.
-        </p>
-        <div className="steps">
-          <span>
-            <b>01</b> Ticket único
-          </span>
-          <span>
-            <b>02</b> Seguimiento
-          </span>
-          <span>
-            <b>03</b> Respuesta
-          </span>
-        </div>
-      </div>
-      <form className="card" onSubmit={submit}>
-        <div className="intro">
-          <i>01</i>
-          <div>
-            <h2>Nueva solicitud</h2>
-            <p>
-              Ingresa con Microsoft al enviarla. Los campos con * son
-              obligatorios.
-            </p>
-          </div>
-        </div>
-        <div className="fields">
+    <section className="request request-workspace fade">
+      <aside className="request-guide">
+        <button className="text-button back-home" onClick={onHome}>← Volver al inicio</button>
+        <div className="eyebrow">ESTAMOS PARA AYUDARTE</div>
+        <h1>Cuéntanos.<br /> Lo movemos<br /><em>contigo.</em></h1>
+        <p>Comparte lo que necesitas y dale a tu solicitud un lugar para avanzar.</p>
+        <ol className="request-stepper" aria-label="Pasos de la solicitud">
+          {steps.map((label, index) => <li key={label} className={index === step ? "current" : index < step ? "complete" : ""} aria-current={index === step ? "step" : undefined}>
+            <span>{index < step ? <PortalIcon name="check" /> : String(index + 1).padStart(2, "0")}</span>
+            <div><strong>{label}</strong><small>{["Para saber cómo contactarte", "El contexto que nos orienta", "Lo que el equipo debe conocer"][index]}</small></div>
+          </li>)}
+        </ol>
+        <div className="request-reassurance"><PortalIcon name="shield" /><p><strong>Tu solicitud, siempre a mano.</strong><br />Sigue cada avance desde Mis tickets con tu cuenta corporativa.</p></div>
+      </aside>
+      <form className="card request-form" ref={formRef} noValidate onSubmit={submit} aria-label="Nueva solicitud">
+        <div className="form-topline"><span>NUEVA SOLICITUD</span><span>PASO {step + 1} DE 3</span></div>
+        <div className="form-progress" aria-hidden="true"><span style={{ width: `${(step + 1) / 3 * 100}%` }} /></div>
+        <div className="intro"><div><h2>{steps[step]}</h2><p>{["Empecemos por saber quién está detrás de la solicitud.", "Ubica tu solicitud para que llegue al equipo adecuado.", "Un buen contexto nos ayuda a darte una mejor respuesta."][step]}</p></div></div>
+        <p className="required-note">Los campos con * son obligatorios.</p>
+        <fieldset className="form-step fields" data-form-step="0" hidden={step !== 0} disabled={sending}>
+          <legend className="sr-only">Tus datos</legend>
           <label>
             Nombre completo*
-            <input name="name" required placeholder="Tu nombre" />
+            <input name="name" autoComplete="name" required placeholder="Tu nombre y apellido" />
           </label>
           <label>
             Correo corporativo*
             <input
               name="email"
+              autoComplete="email"
               type="email"
               required
               placeholder="nombre@dichter-neira.com"
@@ -523,9 +563,13 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
             Con copia (CC) · opcional
             <textarea name="cc" rows={2} maxLength={13000}
               placeholder="persona@dichter-neira.com; otra@dichter-neira.com"
+              onChange={() => setDetailError("")}
               aria-describedby="request-cc-help" disabled={sending} />
             <small id="request-cc-help">Separa los correos con ; o , (máximo 50). Recibirán las notificaciones y la solución con sus adjuntos. Revisa los destinatarios antes de enviar.</small>
           </label>
+        </fieldset>
+        <fieldset className="form-step fields" data-form-step="1" hidden={step !== 1} disabled={sending}>
+          <legend className="sr-only">Tu solicitud</legend>
           <label>
             Negocio*
             <select
@@ -555,7 +599,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
             >
               <option value="">Selecciona el tipo</option>
               {["Muestra", "Cotizaciones", "Analisis", "Otros"].map((item) => (
-                <option key={item}>{item}</option>
+                <option key={item} value={item}>{item === "Analisis" ? "Análisis" : item}</option>
               ))}
             </select>
             {requestType && <small className="management-note" aria-live="polite">Prioridad automática: {priorityFor(requestType)}</small>}
@@ -602,8 +646,12 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
               ))}
             </select>
           </label>
-          <label className="file">
-            Insumos o archivos
+        </fieldset>
+        <fieldset className="form-step fields" data-form-step="2" hidden={step !== 2} disabled={sending}>
+          <legend className="sr-only">Detalle y archivos</legend>
+          <div className="form-context wide"><PortalIcon name="tickets" /><div><strong>{requestType === "Analisis" ? "Análisis" : requestType || "Tu solicitud"}</strong><span>{[business, country, study].filter(Boolean).join(" · ")}</span></div><button type="button" className="text-button" onClick={() => moveTo(1)}>Editar</button></div>
+          <label className="file wide request-dropzone">
+            Insumos o archivos · opcional
             <input
               type="file"
               multiple
@@ -619,7 +667,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
                   : `${files.length} archivos seleccionados · ${sizeLabel(
                       files.reduce((total, file) => total + file.size, 0),
                     )}`
-                : "Subir uno o varios archivos · Excel, PDF, imagen..."}
+                : <><PortalIcon name="upload" /><strong>Selecciona tus archivos</strong><small>Excel, PDF, imágenes y otros documentos</small></>}
             </span>
           </label>
           <label className="wide">
@@ -633,6 +681,7 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
               aria-label="Detalle de la solicitud"
               data-placeholder="Incluye el objetivo, alcance, período requerido y cualquier contexto que ayude al equipo. También puedes pegar imágenes."
               onPaste={pasteDetail}
+              aria-invalid={Boolean(detailError) || undefined}
               onInput={() => setDetailError("")}
             />
             <small className="request-editor-note">
@@ -646,8 +695,8 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
               placeholder="Incluye el objetivo, alcance, período requerido y cualquier contexto que ayude al equipo."
             />
           </label>
-        </div>
-        {files.length > 1 && (
+        </fieldset>
+        {step === 2 && files.length > 1 && (
           <div className="request-selected-files" aria-label="Archivos seleccionados">
             {files.map((file) => (
               <span key={`${file.name}-${file.lastModified}`}>
@@ -683,13 +732,11 @@ function Request({ onCreated }: { onCreated: (ticket: Ticket) => void }) {
             </p>
           </>
         )}
-        <button className="primary" disabled={sending}>
-          {buttonLabel} <b>→</b>
-        </button>
-        <small>
-          La solicitud se guardará en SharePoint y las notificaciones serán
-          gestionadas por Power Automate.
-        </small>
+        <div className="form-navigation">
+          {step > 0 ? <button type="button" className="ghost" disabled={sending} onClick={() => moveTo(step - 1)}>← Anterior</button> : <span className="form-safe"><PortalIcon name="shield" /> Acceso corporativo</span>}
+          {step < 2 ? <button key="continue" type="button" className="primary" onClick={(event) => { event.preventDefault(); nextStep(); }}>Continuar <PortalIcon name="arrow" /></button> : <button key="submit" type="submit" className="primary" disabled={sending || processing > 0}>{buttonLabel} <PortalIcon name="arrow" /></button>}
+        </div>
+        <small className="form-footnote">Al enviar, inicia sesión con tu cuenta Microsoft para registrar la solicitud.</small>
       </form>
     </section>
   );
@@ -705,6 +752,7 @@ function Login({
   return (
     <section className="login fade">
       <div className="login-card">
+        <div className="login-symbol"><PortalIcon name="dashboard" /></div>
         <div className="eyebrow">D&N · EQUIPO INTERNO</div>
         <h1>
           Panel de <em>operaciones</em>
@@ -725,6 +773,7 @@ function Login({
 }
 
 function Dash({
+  userName,
   tickets,
   update,
   download,
@@ -732,6 +781,7 @@ function Dash({
   refresh,
   signOut,
 }: {
+  userName: string;
   tickets: Ticket[];
   update: (ticket: Ticket, patch: Partial<Ticket>) => Promise<boolean>;
   download: (ticket: Ticket) => Promise<void>;
@@ -745,6 +795,14 @@ function Dash({
   signOut: () => void;
   refresh: () => Promise<void>;
 }) {
+  const [section, setSection] = useState<"dashboard" | "tickets">("dashboard");
+  const openTickets = (filters: Partial<TicketFilters> = {}) => {
+    setSearchFilters({ ...emptyFilters, ...filters });
+    setMonth("Todos");
+    setFilter("Todos");
+    setSection("tickets");
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"Todos" | Status>("Todos");
   const [month, setMonth] = useState("Todos");
@@ -796,59 +854,6 @@ function Dash({
   const shown = filterTickets(periodTickets, searchFilters, today).filter(
     (ticket) => filter === "Todos" || ticket.status === filter,
   );
-  const completed = periodTickets.filter(
-    (ticket) =>
-      ticket.status === "Finalizado" && completionHours(ticket) !== null,
-  );
-  const done = completed.length;
-  const doing = periodTickets.filter(
-    (ticket) => ticket.status === "En proceso",
-  ).length;
-  const unassigned = periodTickets.filter(
-    (ticket) => !normalizeAnalyst(ticket.assignee),
-  ).length;
-  const times = completed
-    .map((ticket) => completionHours(ticket)!)
-    .filter(Number.isFinite);
-  const averageHours = times.length
-    ? times.reduce((sum, hours) => sum + hours, 0) / times.length
-    : null;
-  const fastestHours = times.length ? Math.min(...times) : null;
-  const completionRate = periodTickets.length
-    ? Math.round((done / periodTickets.length) * 100)
-    : 0;
-  const analystStats = analysts.map((analyst) => {
-    const assigned = periodTickets.filter(
-      (ticket) => normalizeAnalyst(ticket.assignee) === analyst,
-    );
-    const finalised = assigned.filter(
-      (ticket) =>
-        ticket.status === "Finalizado" && completionHours(ticket) !== null,
-    );
-    const analystTimes = finalised.map((ticket) => completionHours(ticket)!);
-    const lastClosed = finalised.sort((a, b) =>
-      String(b.completed_at).localeCompare(String(a.completed_at)),
-    )[0];
-    return {
-      analyst,
-      active: assigned.filter((ticket) => ticket.status !== "Finalizado")
-        .length,
-      finalised: finalised.length,
-      rate: assigned.length
-        ? Math.round((finalised.length / assigned.length) * 100)
-        : 0,
-      average: analystTimes.length
-        ? analystTimes.reduce((sum, hours) => sum + hours, 0) /
-          analystTimes.length
-        : null,
-      lastClosed,
-    };
-  });
-  const recentCompletions = [...completed]
-    .sort((a, b) =>
-      String(b.completed_at).localeCompare(String(a.completed_at)),
-    )
-    .slice(0, 5);
   const changeStatus = (ticket: Ticket, status: Status) => {
     if (status === "Finalizado" && ticket.status !== "Finalizado") {
       setClosing(ticket);
@@ -858,37 +863,23 @@ function Dash({
   };
   return (
     <>
-      <section className="dash fade">
-        <div className="dash-head">
-          <div>
-            <div className="eyebrow">D&N · CONTROL DE OPERACIÓN</div>
-            <h1>Visión general</h1>
-            <p>Gestiona, asigna y da seguimiento a cada solicitud.</p>
-          </div>
-          <div className="dash-actions">
-            <label className="period-filter">
-              <span>Periodo</span>
-              <select
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-              >
-                <option value="Todos">Histórico completo</option>
-                {months.map((item) => (
-                  <option key={item} value={item}>
-                    {monthLabel(item)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className="ghost" onClick={signOut}>
-              Cerrar sesión
-            </button>
-            <button className="ghost" disabled={refreshing} onClick={async () => {
-              setRefreshing(true);
-              try { await refresh(); } finally { setRefreshing(false); }
-            }}>{refreshing ? "Actualizando…" : "Actualizar"}</button>
-          </div>
-        </div>
+      <section className="internal-workspace">
+        <aside className="workspace-sidebar">
+          <div className="workspace-label">PLANEACIÓN COMERCIAL</div>
+          <div className="workspace-title">Espacio de trabajo<span>Gestión de solicitudes</span></div>
+          <nav aria-label="Área interna">
+            <button className={section === "dashboard" ? "selected" : ""} aria-current={section === "dashboard" ? "page" : undefined} onClick={() => setSection("dashboard")}><PortalIcon name="dashboard" /><span>Dashboard<small>Resultados y desempeño</small></span></button>
+            <button className={section === "tickets" ? "selected" : ""} aria-current={section === "tickets" ? "page" : undefined} onClick={() => setSection("tickets")}><PortalIcon name="tickets" /><span>Consultar tickets<small>Buscar, asignar y resolver</small></span><b>{tickets.filter(ticket => ticket.status !== "Finalizado").length}</b></button>
+          </nav>
+          <div className="workspace-tip"><span className="workspace-live-dot" /><strong>Cada avance cuenta.</strong><p>Consulta los resultados del equipo o entra a los tickets para continuar la gestión.</p></div>
+          <div className="workspace-account"><span>{userName.charAt(0).toUpperCase()}</span><div><strong>{userName}</strong><small>Equipo interno</small></div></div>
+          <button className="workspace-logout" onClick={signOut}><PortalIcon name="logout" /> Cerrar sesión</button>
+        </aside>
+        <div className="workspace-main">
+          <div className="workspace-topline"><span>Área interna <b>/</b> {section === "dashboard" ? "Dashboard" : "Consultar tickets"}</span><button className="ghost" disabled={refreshing} onClick={async () => { setRefreshing(true); try { await refresh(); } finally { setRefreshing(false); } }}><PortalIcon name="refresh" />{refreshing ? "Actualizando…" : "Actualizar datos"}</button></div>
+          <div hidden={section !== "dashboard"}><OperationsDashboard tickets={tickets} onOpenTickets={openTickets} /></div>
+          <div className="ticket-queue fade" hidden={section !== "tickets"}>
+          <div className="queue-heading"><div><div className="eyebrow">DE LA SOLICITUD A LA SOLUCIÓN</div><h1>Consultar tickets</h1><p>Encuentra lo que necesitas y da el siguiente paso.</p></div><label className="period-filter"><span>Mes de creación</span><select value={month} onChange={event => setMonth(event.target.value)}><option value="Todos">Histórico completo</option>{months.map(item => <option key={item} value={item}>{monthLabel(item)}</option>)}</select></label></div>
         <div className="csv-export">
           <div>
             <strong>Exportar información de tickets</strong>
@@ -900,155 +891,6 @@ function Dash({
         </div>
         {exportMessage && <p className="csv-feedback" role="status">{exportMessage}</p>}
         {exportError && <p className="csv-feedback csv-error" role="alert">{exportError}</p>}
-        <div className="metrics management-metrics">
-          <Metric
-            label="Solicitudes totales"
-            value={periodTickets.length}
-            note={
-              month === "Todos" ? "Histórico visible" : "Creadas en el periodo"
-            }
-          />
-          <Metric
-            label="En proceso"
-            value={doing}
-            note="Requieren seguimiento"
-            color="yellow"
-          />
-          <Metric
-            label="Finalizadas"
-            value={done}
-            note={`${completionRate}% de cierre`}
-            color="green"
-          />
-          <Metric
-            label="Tiempo promedio de cierre"
-            value={durationLabel(averageHours)}
-            note={
-              times.length
-                ? `${times.length} cierres medidos`
-                : "Disponible al finalizar"
-            }
-            color="purple"
-          />
-          <Metric
-            label="Sin asignar"
-            value={unassigned}
-            note="Requieren responsable"
-            color="yellow"
-          />
-          <Metric
-            label="Cierre más ágil"
-            value={durationLabel(fastestHours)}
-            note={
-              fastestHours === null
-                ? "Sin cierres en el periodo"
-                : "Mejor tiempo registrado"
-            }
-            color="green"
-          />
-        </div>
-        <div className="insights">
-          <div className="analysts">
-            <div className="eyebrow">Carga activa por analista</div>
-            {analystStats.map((stat, index) => (
-              <div className="analyst" key={stat.analyst}>
-                <i className={`a a${index}`}>{stat.analyst[0]}</i>
-                <b>{stat.analyst}</b>
-                <div className="bar">
-                  <span
-                    style={{
-                      width: `${periodTickets.length ? (stat.active / periodTickets.length) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-                <strong>{stat.active}</strong>
-              </div>
-            ))}
-          </div>
-          <div className="completion">
-            <div className="eyebrow">Ritmo de resolución</div>
-            <div className="ring">
-              <b>
-                {completionRate}%<small>finalizado</small>
-              </b>
-            </div>
-            <p>
-              {done} de {periodTickets.length} solicitudes completadas
-            </p>
-          </div>
-        </div>
-        <section
-          className="performance-panel"
-          aria-labelledby="performance-title"
-        >
-          <div className="performance-head">
-            <div>
-              <div className="eyebrow">Gestión de equipo</div>
-              <h2 id="performance-title">Desempeño por analista</h2>
-              <p>
-                Los tiempos se calculan desde la creación hasta la finalización
-                del ticket.
-              </p>
-            </div>
-            <span>
-              Periodo:{" "}
-              {month === "Todos" ? "histórico completo" : monthLabel(month)}
-            </span>
-          </div>
-          <div className="performance-table">
-            <div className="performance-row performance-labels">
-              <span>Analista</span>
-              <span>Activos</span>
-              <span>Finalizadas</span>
-              <span>Tasa de cierre</span>
-              <span>Tiempo promedio</span>
-              <span>Último cierre</span>
-            </div>
-            {analystStats.map((stat, index) => (
-              <div className="performance-row" key={stat.analyst}>
-                <strong>
-                  <i className={`a a${index}`}>{stat.analyst[0]}</i>
-                  {stat.analyst}
-                </strong>
-                <span>{stat.active}</span>
-                <span>{stat.finalised}</span>
-                <span>
-                  <b className="rate">{stat.rate}%</b>
-                </span>
-                <span>{durationLabel(stat.average)}</span>
-                <span>
-                  {stat.lastClosed?.completed_at
-                    ? fmt(stat.lastClosed.completed_at)
-                    : "—"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="recent-panel" aria-labelledby="recent-title">
-          <div>
-            <div className="eyebrow">Trazabilidad</div>
-            <h2 id="recent-title">Cierres recientes</h2>
-          </div>
-          <div className="recent-list">
-            {recentCompletions.length ? (
-              recentCompletions.map((ticket) => (
-                <div className="recent-close" key={ticket.spId}>
-                  <b>{ticket.id}</b>
-                  <span>
-                    {normalizeAnalyst(ticket.assignee) || "Sin responsable"}
-                  </span>
-                  <strong>{durationLabel(completionHours(ticket))}</strong>
-                  <small>
-                    {ticket.completed_at ? fmt(ticket.completed_at) : ""}
-                  </small>
-                </div>
-              ))
-            ) : (
-              <p>No hay cierres registrados para este periodo.</p>
-            )}
-          </div>
-        </section>
         <div className="panel">
           <div className="table-head">
             <div>
@@ -1065,6 +907,7 @@ function Dash({
                 <button
                   key={item}
                   className={filter === item ? "selected" : ""}
+                  aria-pressed={filter === item}
                   onClick={() => setFilter(item)}
                 >
                   {item}
@@ -1168,6 +1011,8 @@ function Dash({
               </div>
             </article>
           ))}
+        </div>
+          </div>
         </div>
       </section>
       {closing && (
@@ -1814,25 +1659,6 @@ function SolutionFile({
       >
         ×
       </button>
-    </div>
-  );
-}
-function Metric({
-  label,
-  value,
-  note,
-  color = "",
-}: {
-  label: string;
-  value: string | number;
-  note: string;
-  color?: string;
-}) {
-  return (
-    <div className={`metric ${color}`}>
-      <span>{label}</span>
-      <b>{value}</b>
-      <small>{note}</small>
     </div>
   );
 }

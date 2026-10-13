@@ -2,6 +2,26 @@
 
 Ticketera web publicada en GitHub Pages y conectada a SharePoint Online.
 
+## Navegación y seguimiento
+
+La pantalla **Inicio** presenta el centro de solicitudes. **Nueva solicitud** guía al
+solicitante por tres pasos y conserva los datos y adjuntos al avanzar o retroceder.
+El registro requiere la confirmación final y el acceso corporativo de Microsoft.
+
+El área interna separa **Dashboard** de **Consultar tickets**. El dashboard incluye
+demanda y resolución mensual, estado actual, carga y desempeño por analista,
+distribución por país y tipo, antigüedad de abiertos y cumplimiento de compromisos.
+Los gráficos y las alertas permiten abrir la consulta con filtros relacionados.
+
+Los indicadores se filtran por el mes de creación en hora de Bogotá. La evolución
+mensual cuenta cada creación y cierre válido en el mes del evento; sólo considera
+como cierres los tickets actualmente finalizados. Los tiempos excluyen fechas
+ausentes, inválidas, anteriores a la creación o futuras. El cumplimiento compara
+el cierre con la fecha compromiso actual y muestra su base de cálculo. El CSV
+mantiene el histórico completo, independientemente de los filtros de pantalla.
+
+Ejecuta `npm test`, `npm run lint` y `npm run build` para validar el proyecto.
+
 ## Recursos configurados
 
 - Sitio: `https://dichterneiracorp.sharepoint.com/sites/reportingdn`
