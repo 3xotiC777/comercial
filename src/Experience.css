@@ -281,6 +281,107 @@ input, select, textarea { border-radius: 9px; background: #fff; min-height: 47px
   .portal-app .login-card h1 { font-size: 33px; }
   .portal-app .my-tickets { padding: 30px 18px; }
 }
+/* Style the native picker without replacing form validation or keyboard behavior. */
+@supports (appearance: base-select) and selector(::picker(select)) {
+  .portal-app select:not([multiple]),
+  .portal-app select:not([multiple])::picker(select) {
+    appearance: base-select;
+  }
+  .portal-app select:not([multiple]) {
+    cursor: pointer;
+    align-self: start;
+    align-items: center;
+    column-gap: 10px;
+    min-inline-size: 0;
+  }
+  .request-form .fields label:has(> select) {
+    align-content: start;
+  }
+  .portal-app select:not([multiple]):open {
+    border-color: #7ca5fb;
+    box-shadow: 0 0 0 4px #356df312;
+  }
+  .portal-app select:not([multiple]):disabled {
+    cursor: not-allowed;
+  }
+  .portal-app select:not([multiple])::picker-icon {
+    color: #618be0;
+    margin-left: auto;
+    transition: rotate .18s ease;
+  }
+  .portal-app select:not([multiple]):open::picker-icon {
+    rotate: 180deg;
+  }
+  .portal-app select:not([multiple])::picker(select) {
+    inline-size: anchor-size(width);
+    max-inline-size: calc(100vw - 24px);
+    max-block-size: min(340px, 60dvh);
+    margin-block: 7px;
+    padding: 6px;
+    border: 1px solid #a9c6ff;
+    border-radius: 14px;
+    background: #fff;
+    color: #284b70;
+    font: 500 12px/1.5 'Manrope', sans-serif;
+    letter-spacing: normal;
+    text-transform: none;
+    box-shadow: 0 12px 32px #244e8a1c, 0 2px 8px #356df30a;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #bfd1f4 transparent;
+    animation: select-menu-arrive .16s ease-out;
+  }
+  .portal-app select:not([multiple]) option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-block-size: 38px;
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 8px;
+    color: #284b70;
+    background: transparent;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .portal-app select:not([multiple]) option + option {
+    margin-top: 2px;
+  }
+  .portal-app select:not([multiple]) option[value=""] {
+    color: #778ba7;
+  }
+  .portal-app select:not([multiple]) option:checked {
+    color: #255acb;
+    background: #edf3ff;
+    font-weight: 700;
+  }
+  .portal-app select:not([multiple]) option:not(:disabled):is(:hover, :focus) {
+    color: #194fbf;
+    background: #e4eeff;
+    outline: 0;
+  }
+  .portal-app select:not([multiple]) option:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+  }
+  .portal-app select:not([multiple]) option::checkmark {
+    order: 1;
+    margin-left: auto;
+    color: #356df3;
+    font-size: 14px;
+  }
+  @media (max-width: 520px) {
+    .portal-app select:not([multiple])::picker(select) { font-size: 14px; }
+    .portal-app select:not([multiple]) option { min-block-size: 44px; }
+  }
+}
+@keyframes select-menu-arrive {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
