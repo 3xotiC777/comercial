@@ -88,3 +88,47 @@ Para consultas estables en listas grandes, crea un índice en la columna de corr
 del solicitante en la configuración de columnas indexadas de SharePoint.
 
 Pruebas de la consulta: `node --test tests/my-tickets.test.mjs`.
+
+## Comentarios de tickets
+
+**Mis tickets** permite al solicitante agregar comentarios y responder al equipo.
+En el área interna, **Comentarios · Pedir información** abre el mismo historial.
+Comentar no modifica el estado, el responsable ni las fechas del ticket; también
+se conserva el historial de los tickets finalizados. El texto tiene un máximo de
+5.000 caracteres y se muestra como texto seguro, con sus saltos de línea.
+
+La lista **Comentarios Comercial** guarda un elemento por comentario:
+
+| Columna interna | Configuración |
+| --- | --- |
+| `Title` | Texto obligatorio y único: UUID de envío, índice automático |
+| `TicketId` | Texto obligatorio e indexado: ID de SharePoint del ticket |
+| `Comment` | Varias líneas, texto sin formato, obligatorio |
+| `Origin` | Texto obligatorio: `Solicitante` o `Analista` |
+| `Notification` | Texto, valor predeterminado `Pendiente` |
+
+Autor y fecha se obtienen de los metadatos de SharePoint. La aplicación comprueba
+la cuenta corporativa y el correo del ticket guardado antes de consultar o enviar.
+Un reintento conserva el mismo UUID para recuperar un comentario ya guardado.
+La lista hereda los mismos permisos del sitio que **Comercial planeacion**;
+los filtros de la aplicación no sustituyen los permisos de SharePoint.
+
+El flujo **Comentarios tickets - Gmail** se dispara al crear un comentario.
+Verifica el autor contra el solicitante o el equipo autorizado, obtiene los
+destinatarios del ticket y envía desde `reporting.dichterneira@gmail.com`:
+
+- Comentario del solicitante: avisa al equipo.
+- Comentario del analista: avisa al solicitante y copia al equipo.
+- En ambos casos conserva `CC` del ticket, normaliza los separadores y elimina
+  duplicados. El equipo incluye a Diego, Francisco, Miguel y Rony, igual que los
+  avisos existentes. La lista de cuentas del área interna está en `src/team.ts`.
+
+El flujo procesa un envío a la vez y solo procesa registros `Pendiente`.
+Antes de enviar marca `Enviando`; después marca `Enviado`. Si Gmail devuelve
+un error o agota el tiempo, marca `Revisar` y no reintenta automáticamente el
+correo, porque podría haberse entregado. Revisar el historial de ejecución y
+la carpeta Enviados antes de volver a poner un registro en `Pendiente`.
+El disparador es de creación: un reenvío requiere ejecutar de nuevo el historial
+después de verificar el estado; editar el comentario no envía otro correo.
+
+Pruebas de comentarios: `node --experimental-strip-types --test tests/comments.test.mjs`.

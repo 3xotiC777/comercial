@@ -3,6 +3,7 @@ import { loadMyTickets } from "./sharepoint";
 import type { Status, Ticket } from "./sharepoint";
 import "./MyTickets.css";
 import { commitmentDay, deadlineState, priorityFor } from "./ticketManagement";
+import TicketConversation from "./TicketConversation";
 
 const statuses = ["Todos", "Pendiente", "En proceso", "Finalizado"] as const;
 const dateLabel = (value?: string) => {
@@ -29,6 +30,7 @@ export default function MyTickets({ onSignOut }: { onSignOut: () => Promise<void
   const [filter, setFilter] = useState<"Todos" | Status>("Todos");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [conversation, setConversation] = useState<Ticket | null>(null);
   const requestId = useRef(0);
   const shown = tickets.filter((ticket) => filter === "Todos" || ticket.status === filter);
 
@@ -128,6 +130,7 @@ export default function MyTickets({ onSignOut }: { onSignOut: () => Promise<void
                   <dd>{dateLabel(ticket.status === "Finalizado" && ticket.completed_at ? ticket.completed_at : ticket.updated_at)}</dd></div>
               </dl>
               <details className="my-ticket-detail"><summary>Ver mi solicitud</summary><p>{ticketText(ticket.detail)}</p></details>
+              <button type="button" className="ticket-comment-button" onClick={() => setConversation(ticket)}>Comentarios · Agregar o responder <span aria-hidden="true">↗</span></button>
               {ticket.status === "Finalizado" && <div className="my-ticket-solution">
                 <h4>Solución del equipo</h4>
                 <p>{ticket.resolution?.trim() ? ticketText(ticket.resolution) : "Este ticket fue finalizado sin una solución registrada."}</p>
@@ -137,6 +140,7 @@ export default function MyTickets({ onSignOut }: { onSignOut: () => Promise<void
           ))}
         </div>
       )}
+      {conversation && <TicketConversation ticket={conversation} origin="Solicitante" onClose={() => setConversation(null)} />}
     </section>
   );
 }

@@ -123,7 +123,7 @@ const analystAliases: Record<string, Analyst> = {
 export const normalizeAnalyst = (value: string): Analyst =>
   analystAliases[value.trim().toLowerCase()] || "";
 
-async function token(interactive = false) {
+export async function token(interactive = false) {
   await msal.initialize();
   let account = msal.getActiveAccount() || msal.getAllAccounts()[0];
   if (!account && interactive)
@@ -148,7 +148,7 @@ async function token(interactive = false) {
       : null;
   }
 }
-async function graph(
+export async function graph(
   path: string,
   accessToken: string,
   init: RequestInit = {},
@@ -206,7 +206,7 @@ function set(
   if (name) fields[name] = data;
 }
 
-async function getContext(accessToken: string) {
+export async function getContext(accessToken: string) {
   if (context) return context;
   const site = await graph(
     "/sites/dichterneiracorp.sharepoint.com:/sites/reportingdn",

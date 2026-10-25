@@ -16,6 +16,8 @@ import type { Analyst, Status, Ticket } from "./sharepoint";
 import "./App.css";
 import "./Resolution.css";
 import MyTickets from "./MyTickets";
+import TicketConversation from "./TicketConversation";
+import { teamEmails } from "./team";
 import Welcome from "./Welcome";
 import OperationsDashboard from "./OperationsDashboard";
 import PortalIcon from "./PortalIcon";
@@ -26,12 +28,7 @@ import { TicketSearch, PriorityDeadline, TicketManagementDialog } from "./Manage
 import { dayInBogota, emptyFilters, filterTickets, priorityFor } from "./ticketManagement";
 
 const analysts = ["Diego Montoya", "Miguel Cabezas", "Rony Rodriguez"] as const;
-const adminEmails = [
-  "dmontoya@dichter-neira.com",
-  "fvillalba@dichter-neira.com",
-  "mcabezas@dichter-neira.com",
-  "rrodriguez@dichter-neira.com",
-];
+const adminEmails: readonly string[] = teamEmails;
 const catalog: Record<string, string[]> = {
   BOLIVIA: ["P&G"],
   CHILE: ["COCA COLA (KO TRD)", "CANASTA", "PLANIFICACION", "AUDITORES"],
@@ -837,6 +834,7 @@ function Dash({
   };
   const [closing, setClosing] = useState<Ticket | null>(null);
   const [viewingRequest, setViewingRequest] = useState<Ticket | null>(null);
+  const [conversation, setConversation] = useState<Ticket | null>(null);
   const months = useMemo(
     () =>
       [...new Set(tickets.map((ticket) => monthKey(ticket.created_at)))]
@@ -942,6 +940,7 @@ function Dash({
                 </button>
                 <button className="view-request management-link" type="button" onClick={() => setManagement({ ticket, tab: "planning" })}>Fecha compromiso</button>
                 <button className="view-request management-link" type="button" onClick={() => setManagement({ ticket, tab: "history" })}>Historial</button>
+                <button className="ticket-comment-button" type="button" onClick={() => setConversation(ticket)}>Comentarios · Pedir información <span aria-hidden="true">↗</span></button>
                 {ticket.resolution && (
                   <details className="resolution-summary">
                     <summary>Ver solución enviada</summary>
@@ -1015,6 +1014,7 @@ function Dash({
           </div>
         </div>
       </section>
+      {conversation && <TicketConversation ticket={conversation} origin="Analista" onClose={() => setConversation(null)} />}
       {closing && (
         <ResolutionModal
           ticket={closing}
