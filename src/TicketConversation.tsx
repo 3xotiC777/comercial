@@ -53,7 +53,7 @@ export default function TicketConversation({ ticket, origin, onClose }: {
       const comment = await addTicketComment(ticket, origin, text, requestId.current);
       setComments((current) => [...current.filter((item) => item.requestId !== comment.requestId), comment]);
       setText(""); setUncertain(false); requestId.current = crypto.randomUUID();
-      setSuccess("Comentario guardado. El aviso por correo se está preparando.");
+      setSuccess("Comentario guardado. Puedes consultar el estado del aviso junto al comentario.");
     } catch (cause) {
       setUncertain(true);
       setError(`${cause instanceof Error ? cause.message : "No se pudo confirmar el comentario."} Puedes reintentar el mismo envío sin duplicarlo.`);
