@@ -113,9 +113,9 @@ Un reintento conserva el mismo UUID para recuperar un comentario ya guardado.
 La lista hereda los mismos permisos del sitio que **Comercial planeacion**;
 los filtros de la aplicación no sustituyen los permisos de SharePoint.
 
-El flujo **Comentarios tickets - Gmail** se dispara al crear un comentario.
+El flujo **Comentarios tickets - Reporting y Planeacion** se dispara al crear un comentario.
 Verifica el autor contra el solicitante o el equipo autorizado, obtiene los
-destinatarios del ticket y envía desde `reporting.dichterneira@gmail.com`:
+destinatarios del ticket y envía desde `reporting_planeacion@dichter-neira.com`:
 
 - Comentario del solicitante: avisa al equipo.
 - Comentario del analista: avisa al solicitante y copia al equipo.
@@ -123,8 +123,16 @@ destinatarios del ticket y envía desde `reporting.dichterneira@gmail.com`:
   duplicados. El equipo incluye a Diego, Francisco, Miguel y Rony, igual que los
   avisos existentes. La lista de cuentas del área interna está en `src/team.ts`.
 
+Los cuatro avisos usan Office 365 Outlook con `Enviar como` desde el buzón
+compartido. El cierre conserva imágenes CID y adjuntos mediante el borrador
+de Outlook, sin el auxiliar de Gmail. La conexión corporativa requiere
+los permisos delegados de acceso y envío correspondientes.
+
+`Enviado` confirma la aceptación por el conector; no confirma la entrega a la
+bandeja del destinatario ni permite detectar una cuarentena posterior.
+
 El flujo procesa un envío a la vez y solo procesa registros `Pendiente`.
-Antes de enviar marca `Enviando`; después marca `Enviado`. Si Gmail devuelve
+Antes de enviar marca `Enviando`; después marca `Enviado`. Si Outlook devuelve
 un error o agota el tiempo, marca `Revisar` y no reintenta automáticamente el
 correo, porque podría haberse entregado. Revisar el historial de ejecución y
 la carpeta Enviados antes de volver a poner un registro en `Pendiente`.

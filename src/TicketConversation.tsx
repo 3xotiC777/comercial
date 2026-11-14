@@ -91,7 +91,7 @@ export default function TicketConversation({ ticket, origin, onClose }: {
       <form className="conversation-compose" onSubmit={submit}>
         <label htmlFor="ticket-comment">{origin === "Analista" ? "Pedir información o agregar comentario" : "Agregar comentario"}</label>
         <textarea id="ticket-comment" rows={4} value={text} maxLength={maxCommentLength} disabled={sending || uncertain} onChange={(event) => { setText(event.target.value); setSuccess(""); }} placeholder={origin === "Analista" ? "Hola, para continuar necesitamos que nos confirmes…" : "Escribe aquí la información que quieres compartir…"} aria-describedby="comment-recipient-note" />
-        <div className="conversation-compose-meta"><p id="comment-recipient-note">{origin === "Analista" ? "Avisaremos al solicitante" : "Avisaremos al equipo de Planeación"} desde reporting.dichterneira@gmail.com, con las copias del ticket. Comentar no cambia el estado.</p><span>{text.length}/{maxCommentLength}</span></div>
+        <div className="conversation-compose-meta"><p id="comment-recipient-note">{origin === "Analista" ? "Avisaremos al solicitante" : "Avisaremos al equipo de Planeación"} desde reporting_planeacion@dichter-neira.com, con las copias del ticket. Comentar no cambia el estado.</p><span>{text.length}/{maxCommentLength}</span></div>
         {error && <p className="conversation-error" role="alert">{error}</p>}
         {success && <p className="conversation-success" role="status">{success}</p>}
         {ticket.status === "Finalizado" && <p className="conversation-closed">Este ticket está finalizado. El comentario quedará registrado sin reabrirlo.</p>}
