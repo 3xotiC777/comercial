@@ -5,7 +5,7 @@ export type Priority = typeof priorities[number];
 export function priorityFor(type: string): Priority | "" {
   const normalized = type.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
   if (normalized === "muestra") return "Alta";
-  if (["cotizaciones", "cotizacion", "analisis"].includes(normalized)) return "Media";
+  if (["cotizaciones", "cotizacion", "analisis", "ruteador"].includes(normalized)) return "Media";
   return normalized === "otros" ? "Baja" : "";
 }
 export function dayInBogota(value: string | Date): string {

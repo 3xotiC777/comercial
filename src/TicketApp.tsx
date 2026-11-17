@@ -18,6 +18,7 @@ import "./Resolution.css";
 import MyTickets from "./MyTickets";
 import TicketConversation from "./TicketConversation";
 import { teamEmails } from "./team";
+import { catalog, requestTypesFor, studiesFor } from "./requestOptions";
 import Welcome from "./Welcome";
 import OperationsDashboard from "./OperationsDashboard";
 import PortalIcon from "./PortalIcon";
@@ -29,90 +30,6 @@ import { dayInBogota, emptyFilters, filterTickets, priorityFor } from "./ticketM
 
 const analysts = ["Diego Montoya", "Miguel Cabezas", "Rony Rodriguez"] as const;
 const adminEmails: readonly string[] = teamEmails;
-const catalog: Record<string, string[]> = {
-  BOLIVIA: ["P&G"],
-  CHILE: ["COCA COLA (KO TRD)", "CANASTA", "PLANIFICACION", "AUDITORES"],
-  COLOMBIA: [
-    "NESTLE (DSD)",
-    "NESTLE (ISD)",
-    "NESTLE (UTT)",
-    "SAMSUNG",
-    "COCA COLA (KO MD)-PLANOGRAMA",
-    "COCA COLA (KO MD)",
-  ],
-  "COSTA RICA": [
-    "CARGILL",
-    "COCA COLA (KO MD)",
-    "COCA COLA (KO TRD)",
-    "FIFCO MOD",
-    "FIFCO TRD",
-    "NESTLE",
-    "P&G",
-  ],
-  ECUADOR: ["CBC - EC", "COCA COLA (KO TRD)", "P&G", "CBC EC", "P&G_SC"],
-  "EL SALVADOR": [
-    "COCA COLA (KO MD)",
-    "COCA COLA (KO TRD)",
-    "NESTLE",
-    "P&G",
-    "CERVECERIA",
-    "ABI CRECE",
-  ],
-  GUATEMALA: [
-    "CBC - GM",
-    "COCA COLA (KO MD)- ABVO",
-    "COCA COLA (KO MD)- EMBO",
-    "COCA COLA (KO TRD)- ABVO",
-    "COCA COLA (KO TRD)- EMBO",
-    "NESTLE",
-    "P&G",
-    "CBC GT",
-  ],
-  HONDURAS: [
-    "COCA COLA (KO MD)",
-    "COCA COLA (KO TRD)",
-    "NESTLE",
-    "P&G",
-    "CERVECERIA",
-    "ABI CRECE",
-    "CBC - HN",
-  ],
-  NICARAGUA: ["COCA COLA (KO MD)", "COCA COLA (KO TRD)", "NESTLE", "P&G"],
-  PANAMA: [
-    "COCA COLA (KO MD)",
-    "COCA COLA (KO TRD)",
-    "HEINEKEN",
-    "NESTLE",
-    "P&G",
-    "REPRICO",
-  ],
-  PARAGUAY: ["P&G"],
-  PERU: [
-    "ABI",
-    "ABI DAS",
-    "GLORIA",
-    "LINDLEY",
-    "STOREVIEW ABI PERU",
-    "STOREVIEW MD IRT ABI PERU",
-    "CBC MYSTERY",
-    "GLORIA SV TRADICIONAL",
-    "GLORIA SC TRADICIONAL",
-    "AJE",
-    "Lindley - Auditor",
-  ],
-  "REPUBLICA DOMINICANA": [
-    "COCA COLA (KO MD)",
-    "COCA COLA (KO TRD)",
-    "CORRIPIO",
-    "P&G",
-    "INDUVECA",
-    "PEPSI",
-    "INDUSTRIA SAN MIGUEL",
-  ],
-  URUGUAY: ["P&G"],
-  VENEZUELA: ["COCA COLA (KO TRD)"],
-};
-const customerStudies = ["Walmart", "Bimbo", "Nestlé", "Otros"];
 const Logo = () => (
   <img
     className="logo"
@@ -371,8 +288,8 @@ function Request({ onCreated, onHome, onMyTickets }: { onCreated: (ticket: Ticke
   const detailInput = useRef<HTMLTextAreaElement>(null);
   const previewUrls = useRef<string[]>([]);
   const studies = useMemo(
-    () => (business === "Customer" ? customerStudies : catalog[country] || []),
-    [business, country],
+    () => studiesFor(business, country, requestType),
+    [business, country, requestType],
   );
   const studyNotRequired =
     requestType === "Cotizaciones" || requestType === "Otros";
@@ -572,7 +489,9 @@ function Request({ onCreated, onHome, onMyTickets }: { onCreated: (ticket: Ticke
             <select
               value={business}
               onChange={(event) => {
-                setBusiness(event.target.value);
+                const nextBusiness = event.target.value;
+                setBusiness(nextBusiness);
+                if (!requestTypesFor(nextBusiness).includes(requestType)) setRequestType("");
                 setStudy("");
               }}
               required
@@ -589,17 +508,17 @@ function Request({ onCreated, onHome, onMyTickets }: { onCreated: (ticket: Ticke
               onChange={(event) => {
                 const nextType = event.target.value;
                 setRequestType(nextType);
-                if (nextType === "Cotizaciones" || nextType === "Otros")
-                  setStudy("");
+                setStudy("");
               }}
               required
             >
               <option value="">Selecciona el tipo</option>
-              {["Muestra", "Cotizaciones", "Analisis", "Otros"].map((item) => (
+              {requestTypesFor(business).map((item) => (
                 <option key={item} value={item}>{item === "Analisis" ? "Análisis" : item}</option>
               ))}
             </select>
             {requestType && <small className="management-note" aria-live="polite">Prioridad automática: {priorityFor(requestType)}</small>}
+            {requestType === "Ruteador" && <small className="management-note">Exclusivo de Trade. Puedes elegir cualquier estudio del catálogo.</small>}
           </label>
           <label>
             País*

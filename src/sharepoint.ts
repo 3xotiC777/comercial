@@ -1,5 +1,6 @@
 import { PublicClientApplication } from "@azure/msal-browser";
 import { normalizeCc } from "./recipients";
+import { validateRoutingRequest } from "./requestOptions";
 import { commitmentDay, historyKeys, historyEvents, priorityFor, validDay } from "./ticketManagement";
 import type { HistoryVersion, Priority } from "./ticketManagement";
 
@@ -584,6 +585,7 @@ export async function createTicket(
   inlineFiles: File[] = [],
   onProgress?: UploadProgress,
 ) {
+  validateRoutingRequest(ticket);
   const cc = normalizeCc(ticket.cc_emails || "", ticket.requester_email);
   const accessToken = await token(true);
   if (!accessToken) throw new Error("Debes iniciar sesión con Microsoft.");

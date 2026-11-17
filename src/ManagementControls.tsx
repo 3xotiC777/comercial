@@ -101,7 +101,7 @@ export function TicketManagementDialog({ ticket, initialTab, onClose, onSave }: 
         finally { setSaving(false); }
       }}>
         <PriorityDeadline ticket={ticket} />
-        <p className="management-note">Prioridad automática: Muestra → Alta; Cotizaciones y Análisis → Media; Otros → Baja.</p>
+        <p className="management-note">Prioridad automática: Muestra → Alta; Cotizaciones, Análisis y Ruteador → Media; Otros → Baja.</p>
         <label className="commitment-input"><span>Fecha compromiso</span><input type="date" value={due} disabled={saving} onChange={(e) => setDue(e.target.value)} /></label>
         <p className="management-note">Opcional. El plazo vence al finalizar ese día en Bogotá. Se considera próximo a vencer durante los tres días calendario anteriores.</p>
         <div className="management-actions"><button className="ghost" type="button" disabled={saving || !due} onClick={() => setDue("")}>Quitar fecha</button>

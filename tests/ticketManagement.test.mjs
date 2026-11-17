@@ -4,7 +4,7 @@ import { priorityFor, deadlineState, dayInBogota, validDay, filterTickets, empty
 const ticket = { id: 'DN-1', requester_name: 'María Peña', requester_email: 'maria@example.com', assignee: 'Diego Montoya', business: 'Trade', country: 'COLOMBIA', study: 'Nestlé', request_type: 'Muestra', detail: '<p>Universo mensual</p>', created_at: '2026-09-23T02:00:00Z', due_date: '2026-09-25', status: 'Pendiente' };
 test('priority is determined only by type, including accents and legacy singular', () => {
   for (const type of ['Muestra', ' muestra ']) assert.equal(priorityFor(type), 'Alta');
-  for (const type of ['Cotizaciones', 'cotización', 'Analisis', 'Análisis']) assert.equal(priorityFor(type), 'Media');
+  for (const type of ['Cotizaciones', 'cotización', 'Analisis', 'Análisis', 'Ruteador']) assert.equal(priorityFor(type), 'Media');
   assert.equal(priorityFor('Otros'), 'Baja'); assert.equal(priorityFor('desconocido'), '');
 });
 test('dates use Bogotá and reject invalid calendar days', () => {

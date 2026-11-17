@@ -3,6 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import ts from 'typescript';
 import * as management from '../src/ticketManagement.ts';
+import * as requestOptions from '../src/requestOptions.ts';
+import * as recipients from '../src/recipients.ts';
 const compiled = ts.transpileModule(readFileSync(new URL('../src/sharepoint.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 function service({ conflict = false, concurrent = false, missingDate = false, historyFailure = false } = {}) {
   const requests = [];
@@ -14,7 +16,8 @@ function service({ conflict = false, concurrent = false, missingDate = false, hi
     if (path.includes(':/sites/reportingdn')) body = { id: 'site' };
     else if (path.endsWith('/lists')) body = { value: [{ id: 'list', displayName: 'Comercial planeacion' }] };
     else if (path.endsWith('/drives')) body = { value: [{ id: 'drive', name: 'Comercial planeacion proyecto' }] };
-    else if (path.endsWith('/columns')) body = { value: [['Title', 'Título'], ['estado', 'Estado'], ['responsable', 'Responsable'], ['tipo', 'Tipo'], ...(!missingDate ? [['FechaCompromiso', 'Fecha compromiso']] : [])].map(([name, displayName]) => ({ name, displayName })) };
+    else if (path.endsWith('/columns')) body = { value: [['Title', 'Título'], ['estado', 'Estado'], ['responsable', 'Responsable'], ['tipo', 'Tipo'], ['Negocio', 'Negocio'], ['Pais', 'Pais'], ['estudio', 'Estudio'], ...(!missingDate ? [['FechaCompromiso', 'Fecha compromiso']] : [])].map(([name, displayName]) => ({ name, displayName })) };
+    else if (path.endsWith('/items') && init.method === 'POST') body = { id: 'new-ticket' };
     else if (path.endsWith('/items/1')) body = { eTag: '"v2"', fields: { estado: 'Pendiente', FechaCompromiso: concurrent ? '2026-09-24T12:00:00Z' : '' } };
     else if (path.endsWith('/fields')) {
       if (conflict) return new Response('{}', { status: 412 });
@@ -25,10 +28,24 @@ function service({ conflict = false, concurrent = false, missingDate = false, hi
     return new Response(JSON.stringify(body), { status: 200 });
   };
   const exports = {};
-  new Function('require', 'exports', 'window', 'fetch', compiled)((name) => name === './ticketManagement' ? management : { PublicClientApplication: Msal }, exports, { location: { hostname: 'localhost', origin: 'http://localhost' } }, fetch);
+  new Function('require', 'exports', 'window', 'fetch', compiled)((name) => name === './ticketManagement' ? management : name === './requestOptions' ? requestOptions : name === './recipients' ? recipients : { PublicClientApplication: Msal }, exports, { location: { hostname: 'localhost', origin: 'http://localhost' } }, fetch);
   return { api: exports, requests };
 }
 const ticket = { spId: '1', status: 'Pendiente', due_date: '', assignee: '' };
+
+test('routing creation rejects Customer before authentication, uploads or writes', async () => {
+  const { api, requests } = service();
+  await assert.rejects(api.createTicket({ ...ticket, request_type: 'Ruteador', business: 'Customer' }, []), /solo.*Trade/);
+  assert.equal(requests.length, 0);
+});
+
+test('routing creation persists the new type and selected country/study to SharePoint', async () => {
+  const { api, requests } = service();
+  const result = await api.createTicket({ ...ticket, id: 'DN-ROUTE', request_type: 'Ruteador', business: 'Trade', country: 'BOLIVIA', study: 'ABI', requester_email: 'persona@example.com' }, []);
+  const creation = requests.find(r => r.init.method === 'POST' && r.url.endsWith('/items'));
+  assert.deepEqual(JSON.parse(creation.init.body), { fields: { Title: 'DN-ROUTE', estado: 'Pendiente', Negocio: 'Trade', Pais: 'BOLIVIA', estudio: 'ABI', tipo: 'Ruteador' } });
+  assert.equal(result.spId, 'new-ticket');
+});
 test('saving a date patches only that field with concurrency protection', async () => {
   const { api, requests } = service();
   const result = await api.updateTicket(ticket, { due_date: '2026-09-25' });

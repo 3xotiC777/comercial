@@ -22,6 +22,20 @@ mantiene el histórico completo, independientemente de los filtros de pantalla.
 
 Ejecuta `npm test`, `npm run lint` y `npm run build` para validar el proyecto.
 
+## Catálogo de solicitudes
+
+El catálogo del formulario está en `src/requestOptions.ts`. **Ruteador** solo
+se ofrece para **Trade** y tiene prioridad automática **Media**. Para este tipo
+se muestran los 15 países y todos los estudios del catálogo Trade, sin limitar
+los estudios por país y sin repetir sus nombres. El estudio es obligatorio.
+Al cambiar el negocio o el tipo se limpia el estudio; si se pasa a Customer,
+también se limpia Ruteador. La función de creación valida la combinación antes
+de iniciar sesión, cargar archivos o escribir en SharePoint.
+
+Las columnas `tipo`, `país` y `estudio` de SharePoint son de texto. La fórmula
+de la columna calculada `Prioridad` incluye `TRIM(tipo)="Ruteador"` entre los
+casos de prioridad Media, igual que el cálculo de la aplicación.
+
 ## Recursos configurados
 
 - Sitio: `https://dichterneiracorp.sharepoint.com/sites/reportingdn`
